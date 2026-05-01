@@ -29,12 +29,12 @@ def validate_password(password: str) -> bool:
     return result.returncode == 0
 
 
-def _run_sudo(command: list) -> bool:
+def _run_sudo(command: list, stdin: str = "") -> bool:
     if _sudo_password is None:
         return False
     result = subprocess.run(
         ["sudo", "-S"] + command,
-        input=_sudo_password + "\n",
+        input=_sudo_password + "\n" + stdin,
         capture_output=True,
         text=True
     )
@@ -71,16 +71,7 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 """
-    if _sudo_password is None:
-        return False
-
-    result = subprocess.run(
-        ["sudo", "-S", "tee", str(SYSTEMD_DIR / "mailpit.service")],
-        input=_sudo_password + "\n" + service_content,
-        capture_output=True,
-        text=True
-    )
-    if result.returncode != 0:
+    if not _run_sudo(["tee", str(SYSTEMD_DIR / "mailpit.service")], stdin=service_content):
         return False
 
     _run_sudo(["systemctl", "daemon-reload"])

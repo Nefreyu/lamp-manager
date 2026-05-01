@@ -21,6 +21,24 @@ class AjustesPage(Gtk.Box):
 
         self.append(Gtk.Separator())
 
+        # Sección General
+        general_title = Gtk.Label()
+        general_title.set_markup("<span weight='bold'>General</span>")
+        general_title.set_xalign(0)
+        self.append(general_title)
+
+        projects_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        projects_label = Gtk.Label(label="Directorio de proyectos")
+        projects_label.set_xalign(0)
+        projects_box.append(projects_label)
+
+        self.projects_entry = Gtk.Entry()
+        self.projects_entry.set_text(settings.get("general", "projects_dir"))
+        projects_box.append(self.projects_entry)
+        self.append(projects_box)
+
+        self.append(Gtk.Separator())
+
         # Sección Mailpit
         mailpit_title = Gtk.Label()
         mailpit_title.set_markup("<span weight='bold'>Mailpit</span>")
@@ -71,6 +89,7 @@ class AjustesPage(Gtk.Box):
         self.path_entry.set_sensitive(switch.get_active())
 
     def on_save(self, button):
+        settings.set("general", "projects_dir", self.projects_entry.get_text())
         settings.set("mailpit", "storage_enabled", str(self.storage_switch.get_active()).lower())
         settings.set("mailpit", "storage_path", self.path_entry.get_text())
 

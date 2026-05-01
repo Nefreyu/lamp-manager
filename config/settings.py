@@ -8,6 +8,9 @@ DEFAULTS = {
     "mailpit": {
         "storage_enabled": "false",
         "storage_path": "/var/lib/mailpit/mailpit.db",
+    },
+    "general": {
+        "projects_dir": str(Path.home() / "www"),
     }
 }
 
