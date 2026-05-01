@@ -66,6 +66,21 @@ def _vhost_config(name: str, docroot: str, https: bool = False) -> str:
 """
 
 
+def _ensure_localhost_ssl():
+    conf = APACHE_SITES_AVAILABLE / "000-localhost-ssl.conf"
+    if not conf.exists():
+        content = """<VirtualHost *:443>
+    ServerName localhost
+    DocumentRoot /var/www/html
+    SSLEngine on
+    SSLCertificateFile /etc/ssl/certs/ssl-cert-snakeoil.pem
+    SSLCertificateKeyFile /etc/ssl/private/ssl-cert-snakeoil.key
+</VirtualHost>
+"""
+        _sudo_write_file(str(conf), content)
+    _run_sudo(["a2ensite", "000-localhost-ssl"])
+
+
 def enable_https(name: str, projects_dir: str) -> bool:
     CERTS_DIR.mkdir(parents=True, exist_ok=True)
     subprocess.run(["mkcert", "-install"], capture_output=True, text=True)
@@ -79,7 +94,7 @@ def enable_https(name: str, projects_dir: str) -> bool:
     if result.returncode != 0:
         return False
     _run_sudo(["a2enmod", "ssl"])
-    _run_sudo(["a2ensite", "default-ssl"])
+    _ensure_localhost_ssl()
     docroot = _detect_docroot(projects_dir, name)
     if not _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, docroot, https=True)):
         return False

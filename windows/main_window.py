@@ -1,9 +1,10 @@
 import gi
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk
+from gi.repository import Gtk, GLib
 
 from pages.servicios import ServiciosPage, ServiceConfigPage
 from pages.mailpit_config import MailpitConfigPage
+from pages.apache_config import ApacheConfigPage
 from pages.vhosts import VHostsPage
 from windows.password_dialog import PasswordDialog
 from services.systemd import SERVICES, set_password, validate_password
@@ -13,7 +14,7 @@ from pages.ajustes import AjustesPage
 class MainWindow(Gtk.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app)
-        self.set_default_size(800, 500)
+        self.set_default_size(960, 600)
 
         header = Gtk.HeaderBar()
         self.set_titlebar(header)
@@ -39,6 +40,12 @@ class MainWindow(Gtk.ApplicationWindow):
         btn_vhosts.connect("clicked", self.on_section_changed, "vhosts")
         sidebar.append(btn_vhosts)
 
+        spacer = Gtk.Box()
+        spacer.set_vexpand(True)
+        sidebar.append(spacer)
+
+        sidebar.append(Gtk.Separator())
+
         btn_ajustes = Gtk.Button(label="Ajustes")
         btn_ajustes.connect("clicked", self.on_section_changed, "ajustes")
         sidebar.append(btn_ajustes)
@@ -51,18 +58,28 @@ class MainWindow(Gtk.ApplicationWindow):
         self.stack.set_hexpand(True)
         main_box.append(self.stack)
 
-        self.stack.add_named(ServiciosPage(self.navigate_to), "servicios")
+        self.servicios_page = ServiciosPage(self.navigate_to)
+        self.stack.add_named(self.servicios_page, "servicios")
         self.stack.add_named(VHostsPage(), "vhosts")
         self.stack.add_named(AjustesPage(), "ajustes")
 
-        config_pages = {"mailpit": MailpitConfigPage}
+        config_pages = {"mailpit": MailpitConfigPage, "apache2": ApacheConfigPage}
         for service in SERVICES:
             page_class = config_pages.get(service["id"], ServiceConfigPage)
             page = page_class(service, self.navigate_to)
             self.stack.add_named(page, f"service-{service['id']}")
 
     def navigate_to(self, name: str):
+        current = self.stack.get_visible_child_name()
+        if name == "ajustes":
+            self.stack.set_transition_type(Gtk.StackTransitionType.SLIDE_UP)
+        elif current == "ajustes":
+            self.stack.set_transition_type(Gtk.StackTransitionType.SLIDE_DOWN)
+        else:
+            self.stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
         self.stack.set_visible_child_name(name)
+        if name == "servicios":
+            GLib.idle_add(self.servicios_page.on_refresh, None)
 
     def request_password(self):
         self.dialog = PasswordDialog(self, self.on_password_success, self.on_password_cancel)
@@ -80,4 +97,4 @@ class MainWindow(Gtk.ApplicationWindow):
         self.close()
 
     def on_section_changed(self, button, section):
-        self.stack.set_visible_child_name(section)
+        self.navigate_to(section)

@@ -5,7 +5,7 @@ from pathlib import Path
 from config.dev import DEV_MODE, SIMULATE_NOT_INSTALLED
 
 SERVICES = [
-    {"id": "apache2",    "label": "Apache2",     "optional": False, "binary": "/usr/sbin/apache2",    "url": "http://localhost"},
+    {"id": "apache2",    "label": "Apache2",     "optional": False, "binary": "/usr/sbin/apache2",    "url": "http://localhost", "reloadable": True},
     {"id": "mysql",      "label": "MySQL",        "optional": False, "binary": "/usr/sbin/mysqld"},
     {"id": "php8.5-fpm", "label": "PHP 8.5-FPM", "optional": False, "binary": "/usr/sbin/php-fpm8.5"},
     {"id": "phpmyadmin", "label": "phpMyAdmin",   "optional": False, "binary": "/usr/share/phpmyadmin/index.php", "url": "http://localhost/phpmyadmin", "web_only": True, "hide_if_absent": True},
@@ -64,7 +64,7 @@ def get_status(service_id: str) -> bool:
     return result.stdout.strip() == "active"
 
 
-def install_mailpit_service(storage_enabled: bool, storage_path: str) -> bool:
+def install_mailpit_service(storage_enabled: bool, storage_path: str, start: bool = True) -> bool:
     exec_start = "/usr/local/bin/mailpit"
     if storage_enabled:
         storage_dir = str(Path(storage_path).parent)
@@ -88,13 +88,19 @@ WantedBy=multi-user.target
 
     _run_sudo(["systemctl", "daemon-reload"])
     _run_sudo(["systemctl", "enable", "mailpit"])
-    return _run_sudo(["systemctl", "start", "mailpit"])
+    if start:
+        return _run_sudo(["systemctl", "restart", "mailpit"])
+    return True
 
 
 def uninstall_mailpit_service() -> bool:
     _run_sudo(["systemctl", "stop", "mailpit"])
     _run_sudo(["systemctl", "disable", "mailpit"])
     return _run_sudo(["rm", str(SYSTEMD_DIR / "mailpit.service")])
+
+
+def reload_service(service_id: str) -> bool:
+    return _run_sudo(["systemctl", "reload", service_id])
 
 
 def start_service(service_id: str) -> bool:
@@ -108,6 +114,8 @@ def stop_service(service_id: str) -> bool:
 def is_installed(service: dict) -> bool:
     if DEV_MODE and service["id"] in SIMULATE_NOT_INSTALLED:
         return False
+    if service.get("optional"):
+        return (SYSTEMD_DIR / f"{service['id']}.service").exists()
     binary = service.get("binary")
     if binary:
         return Path(binary).exists()

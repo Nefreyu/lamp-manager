@@ -3,10 +3,11 @@ gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, Gio, GLib
 from services.systemd import (
     SERVICES, get_status, is_installed,
-    start_service, stop_service,
+    start_service, stop_service, reload_service,
     install_mailpit_service, uninstall_mailpit_service
 )
 from config import settings
+from services.vhosts import APACHE_SITES_ENABLED
 
 
 class ServiceRow(Gtk.Box):
@@ -47,6 +48,15 @@ class ServiceRow(Gtk.Box):
             self.link_button.connect("clicked", self.on_open_url)
             self.append(self.link_button)
 
+        # Botón recargar (solo servicios con reloadable=True)
+        if service.get("reloadable"):
+            self.reload_button = Gtk.Button()
+            self.reload_button.set_icon_name("view-refresh-symbolic")
+            self.reload_button.set_tooltip_text("Recargar configuración")
+            self.reload_button.set_valign(Gtk.Align.CENTER)
+            self.reload_button.connect("clicked", self.on_reload_clicked)
+            self.append(self.reload_button)
+
         # Switch arrancar/parar (no aplica a servicios web_only)
         if not self.web_only:
             self.switch = Gtk.Switch()
@@ -58,6 +68,17 @@ class ServiceRow(Gtk.Box):
 
     def on_open_url(self, button):
         Gio.AppInfo.launch_default_for_uri(self.url, None)
+
+    def on_reload_clicked(self, button):
+        self.status_label.set_markup("<span color='gray'>Reiniciando...</span>")
+        self.set_sensitive(False)
+        GLib.timeout_add(50, self._do_reload)
+
+    def _do_reload(self):
+        reload_service(self.service_id)
+        self.set_sensitive(True)
+        self.refresh()
+        return False
 
     def refresh(self):
         self._updating = True
@@ -71,6 +92,8 @@ class ServiceRow(Gtk.Box):
                 self.link_button.set_sensitive(False)
             if self.optional:
                 self.install_button.set_label("Instalar servicio")
+            if self.service.get("reloadable"):
+                self.reload_button.set_sensitive(False)
         else:
             self.status_label.set_markup("")
             if self.web_only:
@@ -81,7 +104,13 @@ class ServiceRow(Gtk.Box):
                 self.switch.set_active(active)
                 self.switch.set_sensitive(True)
                 if self.url:
+                    if self.service_id == "apache2":
+                        ssl_enabled = (APACHE_SITES_ENABLED / "000-localhost-ssl.conf").exists()
+                        self.url = "https://localhost" if ssl_enabled else "http://localhost"
+                        self.link_button.set_tooltip_text(self.url)
                     self.link_button.set_sensitive(active)
+                if self.service.get("reloadable"):
+                    self.reload_button.set_sensitive(active)
             if self.optional:
                 self.install_button.set_label("Desinstalar servicio")
 

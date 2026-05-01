@@ -19,6 +19,7 @@ class App(Gtk.Application):
 
     def on_activate(self, app):
         window = MainWindow(app)
+        window.set_startup_id(app.get_application_id())
         window.present()
         if not (DEV_MODE and SKIP_PASSWORD_DIALOG):
             GLib.idle_add(window.request_password)
