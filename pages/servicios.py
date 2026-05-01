@@ -1,14 +1,12 @@
 import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, GLib
-
 from services.systemd import (
-    SERVICES, get_status, service_exists,
+    SERVICES, get_status, is_installed,
     start_service, stop_service,
     install_mailpit_service, uninstall_mailpit_service
 )
 from config import settings
-
 
 class ServiceRow(Gtk.Box):
     def __init__(self, service: dict):
@@ -16,6 +14,7 @@ class ServiceRow(Gtk.Box):
         self.service = service
         self.service_id = service["id"]
         self.optional = service.get("optional", False)
+        self._updating = False
 
         # Nombre
         label = Gtk.Label(label=service["label"])
@@ -23,14 +22,9 @@ class ServiceRow(Gtk.Box):
         label.set_xalign(0)
         self.append(label)
 
-        # Indicador de estado
+        # Indicador de estado (solo para opcionales no instalados)
         self.status_label = Gtk.Label()
         self.append(self.status_label)
-
-        # Botón acción principal (arrancar/parar)
-        self.action_button = Gtk.Button()
-        self.action_button.connect("clicked", self.on_action_clicked)
-        self.append(self.action_button)
 
         # Botón instalar/desinstalar (solo servicios opcionales)
         if self.optional:
@@ -38,39 +32,66 @@ class ServiceRow(Gtk.Box):
             self.install_button.connect("clicked", self.on_install_clicked)
             self.append(self.install_button)
 
+        # Botón abrir en navegador (izquierda del switch)
+        self.url = service.get("url")
+        if self.url:
+            self.link_button = Gtk.Button()
+            self.link_button.set_icon_name("web-browser-symbolic")
+            self.link_button.set_tooltip_text(self.url)
+            self.link_button.set_valign(Gtk.Align.CENTER)
+            self.link_button.connect("clicked", self.on_open_url)
+            self.append(self.link_button)
+
+        # Switch arrancar/parar
+        self.switch = Gtk.Switch()
+        self.switch.set_valign(Gtk.Align.CENTER)
+        self.switch.connect("state-set", self.on_switch_toggled)
+        self.append(self.switch)
+
         self.refresh()
 
+    def on_open_url(self, button):
+        from gi.repository import Gio
+        Gio.AppInfo.launch_default_for_uri(self.url, None)
+
     def refresh(self):
-        if self.optional and not service_exists(self.service_id):
+        self._updating = True
+
+        if not is_installed(self.service):
             self.status_label.set_markup("<span color='orange'>⚠ no instalado</span>")
-            self.action_button.set_label("-")
-            self.action_button.set_sensitive(False)
-            self.install_button.set_label("Instalar servicio")
+            self.switch.set_active(False)
+            self.switch.set_sensitive(False)
+            if self.url:
+                self.link_button.set_sensitive(False)
+            if self.optional:
+                self.install_button.set_label("Instalar servicio")
         else:
             active = get_status(self.service_id)
-            if active:
-                self.status_label.set_markup("<span color='green'>● activo</span>")
-                self.action_button.set_label("Parar")
-            else:
-                self.status_label.set_markup("<span color='red'>● inactivo</span>")
-                self.action_button.set_label("Arrancar")
-            self.action_button.set_sensitive(True)
-
+            self.status_label.set_markup("")
+            self.switch.set_active(active)
+            self.switch.set_sensitive(True)
+            if self.url:
+                self.link_button.set_sensitive(active)
             if self.optional:
                 self.install_button.set_label("Desinstalar servicio")
 
-    def on_action_clicked(self, button):
-        active = get_status(self.service_id)
-        print(f"Estado actual de {self.service_id}: {active}")
-        if active:
-            result = stop_service(self.service_id)
-        else:
+        self._updating = False
+
+    def on_switch_toggled(self, switch, state):
+        if self._updating:
+            return False  # Ignoramos cambios programáticos
+
+        if state:
             result = start_service(self.service_id)
-        print(f"Resultado de la operación: {result}")
+        else:
+            result = stop_service(self.service_id)
+
+        print(f"Operación en {self.service_id}: {result}")
         GLib.timeout_add(500, self.refresh)
+        return False  # Dejamos que GTK actualice el estado visualmente
 
     def on_install_clicked(self, button):
-        if service_exists(self.service_id):
+        if is_installed(self.service):
             uninstall_mailpit_service()
         else:
             storage_enabled = settings.get("mailpit", "storage_enabled") == "true"
@@ -91,7 +112,6 @@ class ServiciosPage(Gtk.Box):
         title.set_markup("<span size='x-large' weight='bold'>Servicios</span>")
         title.set_xalign(0)
         self.append(title)
-
         self.append(Gtk.Separator())
 
         self.rows = []

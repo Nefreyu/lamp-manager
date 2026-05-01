@@ -73,4 +73,14 @@ class AjustesPage(Gtk.Box):
     def on_save(self, button):
         settings.set("mailpit", "storage_enabled", str(self.storage_switch.get_active()).lower())
         settings.set("mailpit", "storage_path", self.path_entry.get_text())
-        self.confirm_label.set_markup("<span color='green'>Ajustes guardados correctamente.</span>")
+
+        from services.systemd import SERVICES, is_installed, uninstall_mailpit_service, install_mailpit_service
+        mailpit = next(s for s in SERVICES if s["id"] == "mailpit")
+        if is_installed(mailpit):
+            storage_enabled = self.storage_switch.get_active()
+            storage_path = self.path_entry.get_text()
+            uninstall_mailpit_service()
+            install_mailpit_service(storage_enabled, storage_path)
+            self.confirm_label.set_markup("<span color='green'>Ajustes guardados y servicio reiniciado correctamente.</span>")
+        else:
+            self.confirm_label.set_markup("<span color='green'>Ajustes guardados correctamente.</span>")

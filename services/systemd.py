@@ -1,11 +1,12 @@
 import subprocess
 from pathlib import Path
+from config.dev import DEV_MODE, SIMULATE_NOT_INSTALLED
 
 SERVICES = [
-    {"id": "apache2",    "label": "Apache2",    "optional": False},
-    {"id": "mysql",      "label": "MySQL",       "optional": False},
-    {"id": "php8.5-fpm", "label": "PHP 8.5-FPM","optional": False},
-    {"id": "mailpit",    "label": "Mailpit",     "optional": True, "binary": "/usr/local/bin/mailpit"},
+    {"id": "apache2",    "label": "Apache2",     "optional": False, "binary": "/usr/sbin/apache2",    "url": "http://localhost"},
+    {"id": "mysql",      "label": "MySQL",        "optional": False, "binary": "/usr/sbin/mysqld"},
+    {"id": "php8.5-fpm", "label": "PHP 8.5-FPM", "optional": False, "binary": "/usr/sbin/php-fpm8.5"},
+    {"id": "mailpit",    "label": "Mailpit",      "optional": True,  "binary": "/usr/local/bin/mailpit", "url": "http://localhost:8025"},
 ]
 
 SYSTEMD_DIR = Path("/etc/systemd/system")
@@ -47,11 +48,6 @@ def get_status(service_id: str) -> bool:
         text=True
     )
     return result.stdout.strip() == "active"
-
-
-def service_exists(service_id: str) -> bool:
-    """Comprueba si el archivo .service existe en systemd."""
-    return (SYSTEMD_DIR / f"{service_id}.service").exists()
 
 
 def install_mailpit_service(storage_enabled: bool, storage_path: str) -> bool:
@@ -105,3 +101,16 @@ def start_service(service_id: str) -> bool:
 
 def stop_service(service_id: str) -> bool:
     return _run_sudo(["systemctl", "stop", service_id])
+
+def is_installed(service: dict) -> bool:
+    if DEV_MODE and service["id"] in SIMULATE_NOT_INSTALLED:
+        return False
+    binary = service.get("binary")
+    if binary:
+        return Path(binary).exists()
+    # Si no tiene binary, asumimos que está instalado si el paquete existe
+    result = subprocess.run(
+        ["which", service["id"]],
+        capture_output=True, text=True
+    )
+    return result.returncode == 0
