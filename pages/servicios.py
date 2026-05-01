@@ -10,11 +10,13 @@ from config import settings
 
 
 class ServiceRow(Gtk.Box):
-    def __init__(self, service: dict, navigate_to):
+    def __init__(self, service: dict, navigate_to, on_changed=None):
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         self.service = service
         self.service_id = service["id"]
         self.optional = service.get("optional", False)
+        self.web_only = service.get("web_only", False)
+        self.on_changed = on_changed
         self._updating = False
 
         # Nombre como botón de navegación
@@ -45,11 +47,12 @@ class ServiceRow(Gtk.Box):
             self.link_button.connect("clicked", self.on_open_url)
             self.append(self.link_button)
 
-        # Switch arrancar/parar
-        self.switch = Gtk.Switch()
-        self.switch.set_valign(Gtk.Align.CENTER)
-        self.switch.connect("state-set", self.on_switch_toggled)
-        self.append(self.switch)
+        # Switch arrancar/parar (no aplica a servicios web_only)
+        if not self.web_only:
+            self.switch = Gtk.Switch()
+            self.switch.set_valign(Gtk.Align.CENTER)
+            self.switch.connect("state-set", self.on_switch_toggled)
+            self.append(self.switch)
 
         self.refresh()
 
@@ -61,19 +64,24 @@ class ServiceRow(Gtk.Box):
 
         if not is_installed(self.service):
             self.status_label.set_markup("<span color='orange'>⚠ no instalado</span>")
-            self.switch.set_active(False)
-            self.switch.set_sensitive(False)
+            if not self.web_only:
+                self.switch.set_active(False)
+                self.switch.set_sensitive(False)
             if self.url:
                 self.link_button.set_sensitive(False)
             if self.optional:
                 self.install_button.set_label("Instalar servicio")
         else:
-            active = get_status(self.service_id)
             self.status_label.set_markup("")
-            self.switch.set_active(active)
-            self.switch.set_sensitive(True)
-            if self.url:
-                self.link_button.set_sensitive(active)
+            if self.web_only:
+                if self.url:
+                    self.link_button.set_sensitive(True)
+            else:
+                active = get_status(self.service_id)
+                self.switch.set_active(active)
+                self.switch.set_sensitive(True)
+                if self.url:
+                    self.link_button.set_sensitive(active)
             if self.optional:
                 self.install_button.set_label("Desinstalar servicio")
 
@@ -87,7 +95,11 @@ class ServiceRow(Gtk.Box):
         else:
             result = stop_service(self.service_id)
         print(f"Operación en {self.service_id}: {result}")
-        GLib.timeout_add(500, self.refresh)
+        def after_toggle():
+            self.refresh()
+            if self.on_changed:
+                self.on_changed()
+        GLib.timeout_add(500, after_toggle)
         return False
 
     def on_install_clicked(self, button):
@@ -114,9 +126,31 @@ class ServiciosPage(Gtk.Box):
         self.append(title)
         self.append(Gtk.Separator())
 
+        # Banner de aviso Apache+PHP-FPM
+        self.fpm_banner = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        self.fpm_banner.set_margin_bottom(4)
+
+        banner_icon = Gtk.Image.new_from_icon_name("dialog-warning-symbolic")
+        self.fpm_banner.append(banner_icon)
+
+        banner_label = Gtk.Label(label="Apache está activo pero PHP-FPM no. Los proyectos PHP no funcionarán.")
+        banner_label.set_hexpand(True)
+        banner_label.set_xalign(0)
+        self.fpm_banner.append(banner_label)
+
+        fix_btn = Gtk.Button(label="Arrancar PHP-FPM")
+        fix_btn.add_css_class("suggested-action")
+        fix_btn.connect("clicked", self.on_start_fpm)
+        self.fpm_banner.append(fix_btn)
+
+        self.fpm_banner.set_visible(False)
+        self.append(self.fpm_banner)
+
         self.rows = []
         for service in SERVICES:
-            row = ServiceRow(service, navigate_to)
+            if service.get("hide_if_absent") and not is_installed(service):
+                continue
+            row = ServiceRow(service, navigate_to, on_changed=self._check_fpm_warning)
             self.append(row)
             self.rows.append(row)
 
@@ -125,9 +159,28 @@ class ServiciosPage(Gtk.Box):
         refresh_btn.set_halign(Gtk.Align.START)
         self.append(refresh_btn)
 
+        self._check_fpm_warning()
+
+    def _check_fpm_warning(self):
+        apache = next((s for s in SERVICES if s["id"] == "apache2"), None)
+        fpm = next((s for s in SERVICES if s["id"] == "php8.5-fpm"), None)
+        if apache and fpm and is_installed(apache) and is_installed(fpm):
+            show = get_status("apache2") and not get_status("php8.5-fpm")
+            self.fpm_banner.set_visible(show)
+
+    def on_start_fpm(self, button):
+        start_service("php8.5-fpm")
+        GLib.timeout_add(500, self._after_start_fpm)
+
+    def _after_start_fpm(self):
+        self._check_fpm_warning()
+        for row in self.rows:
+            row.refresh()
+
     def on_refresh(self, button):
         for row in self.rows:
             row.refresh()
+        self._check_fpm_warning()
 
 
 class ServiceConfigPage(Gtk.Box):

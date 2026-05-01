@@ -1,11 +1,13 @@
 import gi
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk, Gio, GLib
+gi.require_version("Gdk", "4.0")
+from gi.repository import Gtk, Gio, GLib, Gdk
 
 from config import settings
 from services.vhosts import (
     list_projects, vhost_config_path, vhost_is_enabled,
-    create_vhost, delete_vhost, enable_vhost, disable_vhost
+    create_vhost, delete_vhost, enable_vhost, disable_vhost,
+    is_mkcert_installed, vhost_has_https, enable_https, disable_https
 )
 
 
@@ -33,6 +35,12 @@ class VHostRow(Gtk.Box):
         self.link_button.connect("clicked", self.on_open_url)
         self.append(self.link_button)
 
+        self.https_button = Gtk.Button()
+        self.https_button.set_valign(Gtk.Align.CENTER)
+        self.https_button.set_tooltip_text("Activar/desactivar HTTPS")
+        self.https_button.connect("clicked", self.on_https_clicked)
+        self.append(self.https_button)
+
         self.switch = Gtk.Switch()
         self.switch.set_valign(Gtk.Align.CENTER)
         self.switch.connect("state-set", self.on_switch_toggled)
@@ -52,13 +60,47 @@ class VHostRow(Gtk.Box):
         self._updating = True
         has_config = vhost_config_path(self.name).exists()
         enabled = vhost_is_enabled(self.name)
+        has_https = vhost_has_https(self.name)
         self.switch.set_active(enabled)
         self.switch.set_sensitive(has_config)
         self.link_button.set_sensitive(enabled)
+        self.link_button.set_tooltip_text(
+            f"https://{self.name}.test" if has_https else f"http://{self.name}.test"
+        )
+        self.https_button.set_icon_name(
+            "changes-prevent-symbolic" if has_https else "changes-allow-symbolic"
+        )
+        self.https_button.set_tooltip_text(
+            "HTTPS activo — pulsa para desactivar" if has_https else "Activar HTTPS"
+        )
+        if has_https:
+            self.https_button.add_css_class("https-active")
+        else:
+            self.https_button.remove_css_class("https-active")
         self._updating = False
 
     def on_open_url(self, button):
-        Gio.AppInfo.launch_default_for_uri(f"http://{self.name}.test", None)
+        protocol = "https" if vhost_has_https(self.name) else "http"
+        Gio.AppInfo.launch_default_for_uri(f"{protocol}://{self.name}.test", None)
+
+    def on_https_clicked(self, button):
+        if not is_mkcert_installed():
+            dialog = Gtk.AlertDialog()
+            dialog.set_message("mkcert no está instalado")
+            dialog.set_detail(
+                "Para activar HTTPS necesitas instalar mkcert:\n\n"
+                "sudo apt install mkcert"
+            )
+            dialog.set_buttons(["Aceptar"])
+            dialog.show(self.get_root())
+            return
+
+        projects_dir = settings.get("general", "projects_dir")
+        if vhost_has_https(self.name):
+            disable_https(self.name, projects_dir)
+        else:
+            enable_https(self.name, projects_dir)
+        GLib.timeout_add(500, self._refresh)
 
     def on_switch_toggled(self, switch, state):
         if self._updating:
@@ -107,6 +149,14 @@ class VHostsPage(Gtk.Box):
         self.set_margin_bottom(24)
         self.set_margin_start(24)
         self.set_margin_end(24)
+
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(b"button.https-active { color: #26a269; }")
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(),
+            css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
 
         header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
 

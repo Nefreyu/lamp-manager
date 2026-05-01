@@ -8,6 +8,7 @@ SERVICES = [
     {"id": "apache2",    "label": "Apache2",     "optional": False, "binary": "/usr/sbin/apache2",    "url": "http://localhost"},
     {"id": "mysql",      "label": "MySQL",        "optional": False, "binary": "/usr/sbin/mysqld"},
     {"id": "php8.5-fpm", "label": "PHP 8.5-FPM", "optional": False, "binary": "/usr/sbin/php-fpm8.5"},
+    {"id": "phpmyadmin", "label": "phpMyAdmin",   "optional": False, "binary": "/usr/share/phpmyadmin/index.php", "url": "http://localhost/phpmyadmin", "web_only": True, "hide_if_absent": True},
     {"id": "mailpit",    "label": "Mailpit",      "optional": True,  "binary": "/usr/local/bin/mailpit", "url": "http://localhost:8025"},
 ]
 

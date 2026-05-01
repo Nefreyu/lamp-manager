@@ -1,6 +1,7 @@
 import getpass
 import os
 import shutil
+import subprocess
 from pathlib import Path
 from services.systemd import _run_sudo, _sudo_write_file
 
@@ -9,6 +10,7 @@ HOSTS_MARKER = "# lamp-manager"
 APACHE_SITES_AVAILABLE = Path("/etc/apache2/sites-available")
 APACHE_SITES_ENABLED = Path("/etc/apache2/sites-enabled")
 INDEX_PAGE = Path("/var/www/html/index.html")
+CERTS_DIR = Path.home() / ".local/share/lamp-manager/certs"
 
 
 def list_projects(projects_dir: str) -> list[str]:
@@ -24,6 +26,72 @@ def vhost_config_path(name: str) -> Path:
 
 def vhost_is_enabled(name: str) -> bool:
     return (APACHE_SITES_ENABLED / f"{name}.test.conf").exists()
+
+
+def is_mkcert_installed() -> bool:
+    result = subprocess.run(["which", "mkcert"], capture_output=True, text=True)
+    return result.returncode == 0
+
+
+def vhost_has_https(name: str) -> bool:
+    return (CERTS_DIR / f"{name}.test.pem").exists()
+
+
+def _vhost_config(name: str, docroot: str, https: bool = False) -> str:
+    directory_block = f"""    <Directory {docroot}>
+        AllowOverride All
+        Require all granted
+    </Directory>"""
+
+    if https:
+        return f"""<VirtualHost *:80>
+    ServerName {name}.test
+    Redirect permanent / https://{name}.test/
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName {name}.test
+    DocumentRoot {docroot}
+    SSLEngine on
+    SSLCertificateFile {CERTS_DIR}/{name}.test.pem
+    SSLCertificateKeyFile {CERTS_DIR}/{name}.test-key.pem
+{directory_block}
+</VirtualHost>
+"""
+    return f"""<VirtualHost *:80>
+    ServerName {name}.test
+    DocumentRoot {docroot}
+{directory_block}
+</VirtualHost>
+"""
+
+
+def enable_https(name: str, projects_dir: str) -> bool:
+    CERTS_DIR.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["mkcert", "-install"], capture_output=True, text=True)
+    result = subprocess.run(
+        ["mkcert",
+         "-cert-file", str(CERTS_DIR / f"{name}.test.pem"),
+         "-key-file", str(CERTS_DIR / f"{name}.test-key.pem"),
+         f"{name}.test"],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        return False
+    _run_sudo(["a2enmod", "ssl"])
+    docroot = str(Path(projects_dir) / name)
+    if not _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, docroot, https=True)):
+        return False
+    return _run_sudo(["systemctl", "reload", "apache2"])
+
+
+def disable_https(name: str, projects_dir: str) -> bool:
+    (CERTS_DIR / f"{name}.test.pem").unlink(missing_ok=True)
+    (CERTS_DIR / f"{name}.test-key.pem").unlink(missing_ok=True)
+    docroot = str(Path(projects_dir) / name)
+    if not _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, docroot, https=False)):
+        return False
+    return _run_sudo(["systemctl", "reload", "apache2"])
 
 
 def add_hosts_entry(domain: str) -> bool:
@@ -99,16 +167,7 @@ def generate_index_page(projects_dir: str) -> bool:
 
 def create_vhost(name: str, projects_dir: str) -> bool:
     docroot = str(Path(projects_dir) / name)
-    config = f"""<VirtualHost *:80>
-    ServerName {name}.test
-    DocumentRoot {docroot}
-    <Directory {docroot}>
-        AllowOverride All
-        Require all granted
-    </Directory>
-</VirtualHost>
-"""
-    if not _sudo_write_file(str(vhost_config_path(name)), config):
+    if not _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, docroot)):
         return False
     base_dir = Path(projects_dir)
     if base_dir.exists() and not os.access(base_dir, os.W_OK):
@@ -132,6 +191,7 @@ def delete_vhost(name: str, projects_dir: str) -> bool:
     project_dir = Path(projects_dir) / name
     if project_dir.exists():
         shutil.rmtree(project_dir)
+    disable_https(name, projects_dir)
     generate_index_page(projects_dir)
     return True
 
