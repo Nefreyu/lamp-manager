@@ -2,10 +2,11 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk
 
-from pages.servicios import ServiciosPage
+from pages.servicios import ServiciosPage, ServiceConfigPage
+from pages.mailpit_config import MailpitConfigPage
 from pages.vhosts import VHostsPage
 from windows.password_dialog import PasswordDialog
-from services.systemd import set_password, validate_password
+from services.systemd import SERVICES, set_password, validate_password
 from pages.ajustes import AjustesPage
 
 
@@ -50,9 +51,18 @@ class MainWindow(Gtk.ApplicationWindow):
         self.stack.set_hexpand(True)
         main_box.append(self.stack)
 
-        self.stack.add_named(ServiciosPage(), "servicios")
+        self.stack.add_named(ServiciosPage(self.navigate_to), "servicios")
         self.stack.add_named(VHostsPage(), "vhosts")
         self.stack.add_named(AjustesPage(), "ajustes")
+
+        config_pages = {"mailpit": MailpitConfigPage}
+        for service in SERVICES:
+            page_class = config_pages.get(service["id"], ServiceConfigPage)
+            page = page_class(service, self.navigate_to)
+            self.stack.add_named(page, f"service-{service['id']}")
+
+    def navigate_to(self, name: str):
+        self.stack.set_visible_child_name(name)
 
     def request_password(self):
         self.dialog = PasswordDialog(self, self.on_password_success, self.on_password_cancel)

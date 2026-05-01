@@ -1,6 +1,6 @@
 import gi
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk, GLib
+from gi.repository import Gtk, Gio, GLib
 from services.systemd import (
     SERVICES, get_status, is_installed,
     start_service, stop_service,
@@ -8,21 +8,24 @@ from services.systemd import (
 )
 from config import settings
 
+
 class ServiceRow(Gtk.Box):
-    def __init__(self, service: dict):
+    def __init__(self, service: dict, navigate_to):
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         self.service = service
         self.service_id = service["id"]
         self.optional = service.get("optional", False)
         self._updating = False
 
-        # Nombre
-        label = Gtk.Label(label=service["label"])
-        label.set_hexpand(True)
-        label.set_xalign(0)
-        self.append(label)
+        # Nombre como botón de navegación
+        name_btn = Gtk.Button(label=service["label"])
+        name_btn.add_css_class("flat")
+        name_btn.set_hexpand(True)
+        name_btn.get_child().set_xalign(0)
+        name_btn.connect("clicked", lambda _: navigate_to(f"service-{self.service_id}"))
+        self.append(name_btn)
 
-        # Indicador de estado (solo para opcionales no instalados)
+        # Indicador de estado
         self.status_label = Gtk.Label()
         self.append(self.status_label)
 
@@ -32,7 +35,7 @@ class ServiceRow(Gtk.Box):
             self.install_button.connect("clicked", self.on_install_clicked)
             self.append(self.install_button)
 
-        # Botón abrir en navegador (izquierda del switch)
+        # Botón abrir en navegador
         self.url = service.get("url")
         if self.url:
             self.link_button = Gtk.Button()
@@ -51,7 +54,6 @@ class ServiceRow(Gtk.Box):
         self.refresh()
 
     def on_open_url(self, button):
-        from gi.repository import Gio
         Gio.AppInfo.launch_default_for_uri(self.url, None)
 
     def refresh(self):
@@ -79,16 +81,14 @@ class ServiceRow(Gtk.Box):
 
     def on_switch_toggled(self, switch, state):
         if self._updating:
-            return False  # Ignoramos cambios programáticos
-
+            return False
         if state:
             result = start_service(self.service_id)
         else:
             result = stop_service(self.service_id)
-
         print(f"Operación en {self.service_id}: {result}")
         GLib.timeout_add(500, self.refresh)
-        return False  # Dejamos que GTK actualice el estado visualmente
+        return False
 
     def on_install_clicked(self, button):
         if is_installed(self.service):
@@ -101,7 +101,7 @@ class ServiceRow(Gtk.Box):
 
 
 class ServiciosPage(Gtk.Box):
-    def __init__(self):
+    def __init__(self, navigate_to):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self.set_margin_top(24)
         self.set_margin_bottom(24)
@@ -116,7 +116,7 @@ class ServiciosPage(Gtk.Box):
 
         self.rows = []
         for service in SERVICES:
-            row = ServiceRow(service)
+            row = ServiceRow(service, navigate_to)
             self.append(row)
             self.rows.append(row)
 
@@ -128,3 +128,31 @@ class ServiciosPage(Gtk.Box):
     def on_refresh(self, button):
         for row in self.rows:
             row.refresh()
+
+
+class ServiceConfigPage(Gtk.Box):
+    def __init__(self, service: dict, navigate_to):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        self.set_margin_top(24)
+        self.set_margin_bottom(24)
+        self.set_margin_start(24)
+        self.set_margin_end(24)
+
+        back_btn = Gtk.Button(label="Servicios")
+        back_btn.set_icon_name("go-previous-symbolic")
+        back_btn.add_css_class("flat")
+        back_btn.set_halign(Gtk.Align.START)
+        back_btn.connect("clicked", lambda _: navigate_to("servicios"))
+        self.append(back_btn)
+
+        title = Gtk.Label()
+        title.set_markup(f"<span size='x-large' weight='bold'>{service['label']}</span>")
+        title.set_xalign(0)
+        self.append(title)
+        self.append(Gtk.Separator())
+
+        placeholder = Gtk.Label(
+            label=f"Sección para la configuración del servicio de {service['label']}"
+        )
+        placeholder.set_xalign(0)
+        self.append(placeholder)

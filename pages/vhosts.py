@@ -10,10 +10,12 @@ from services.vhosts import (
 
 
 class VHostRow(Gtk.Box):
-    def __init__(self, name: str, on_deleted):
+    def __init__(self, name: str, on_deleted, on_status):
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         self.name = name
         self.on_deleted = on_deleted
+        self.on_status = on_status
+        self._updating = False
 
         label = Gtk.Label(label=name)
         label.set_hexpand(True)
@@ -47,29 +49,37 @@ class VHostRow(Gtk.Box):
         self._refresh()
 
     def _refresh(self):
+        self._updating = True
         has_config = vhost_config_path(self.name).exists()
         enabled = vhost_is_enabled(self.name)
         self.switch.set_active(enabled)
         self.switch.set_sensitive(has_config)
         self.link_button.set_sensitive(enabled)
+        self._updating = False
 
     def on_open_url(self, button):
         Gio.AppInfo.launch_default_for_uri(f"http://{self.name}.test", None)
 
     def on_switch_toggled(self, switch, state):
+        if self._updating:
+            return False
         if state:
-            enable_vhost(self.name)
+            ok = enable_vhost(self.name)
         else:
-            disable_vhost(self.name)
+            ok = disable_vhost(self.name)
+        if not ok:
+            self.on_status(False, f"Error al {'activar' if state else 'desactivar'} {self.name}.test")
         GLib.timeout_add(500, self._refresh)
         return False
 
     def on_delete_clicked(self, button):
         dialog = Gtk.AlertDialog()
         dialog.set_message(f"¿Eliminar {self.name}?")
+        projects_dir = settings.get("general", "projects_dir")
         dialog.set_detail(
-            f"Se eliminará la configuración de Apache y la entrada en /etc/hosts.\n"
-            f"El directorio del proyecto no se borrará."
+            f"Se eliminarán la configuración de Apache, la entrada en /etc/hosts "
+            f"y el directorio {projects_dir}/{self.name}.\n\n"
+            f"Esta acción no se puede deshacer."
         )
         dialog.set_buttons(["Cancelar", "Eliminar"])
         dialog.set_default_button(0)
@@ -82,8 +92,12 @@ class VHostRow(Gtk.Box):
         except Exception:
             return
         if index == 1:
-            delete_vhost(self.name)
-            self.on_deleted()
+            projects_dir = settings.get("general", "projects_dir")
+            ok = delete_vhost(self.name, projects_dir)
+            if ok:
+                self.on_deleted()
+            else:
+                self.on_status(False, f"Error al eliminar {self.name}: comprueba los permisos sudo")
 
 
 class VHostsPage(Gtk.Box):
@@ -111,10 +125,20 @@ class VHostsPage(Gtk.Box):
         self.append(header_box)
         self.append(Gtk.Separator())
 
+        self.status_label = Gtk.Label(label="")
+        self.status_label.set_xalign(0)
+        self.append(self.status_label)
+
         self.list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.append(self.list_box)
 
         self._load_projects()
+
+    def _set_status(self, success: bool, message: str):
+        color = "green" if success else "red"
+        self.status_label.set_markup(f"<span color='{color}'>{message}</span>")
+        if success:
+            GLib.timeout_add_seconds(15, lambda: self.status_label.set_markup("") or False)
 
     def _load_projects(self):
         while child := self.list_box.get_first_child():
@@ -130,7 +154,7 @@ class VHostsPage(Gtk.Box):
             return
 
         for name in projects:
-            row = VHostRow(name, on_deleted=self._load_projects)
+            row = VHostRow(name, on_deleted=self._load_projects, on_status=self._set_status)
             self.list_box.append(row)
 
     def on_new_project(self, button):
@@ -144,33 +168,55 @@ class VHostsPage(Gtk.Box):
         content.set_margin_start(16)
         content.set_margin_end(16)
 
-        label = Gtk.Label(label="Nombre del proyecto:")
-        label.set_xalign(0)
-        content.append(label)
+        name_label = Gtk.Label(label="Nombre del proyecto:")
+        name_label.set_xalign(0)
+        content.append(name_label)
 
         entry = Gtk.Entry()
         entry.set_placeholder_text("mi-proyecto")
         content.append(entry)
 
-        info = Gtk.Label()
         projects_dir = settings.get("general", "projects_dir")
+        info = Gtk.Label()
         info.set_markup(f"<span color='gray' size='small'>Se creará en {projects_dir}</span>")
         info.set_xalign(0)
         content.append(info)
 
+        error_label = Gtk.Label(label="")
+        error_label.set_xalign(0)
+        content.append(error_label)
+
+        create_btn = dialog.add_button("Crear", Gtk.ResponseType.OK)
         dialog.add_button("Cancelar", Gtk.ResponseType.CANCEL)
-        dialog.add_button("Crear", Gtk.ResponseType.OK)
         dialog.set_default_response(Gtk.ResponseType.OK)
 
         entry.connect("activate", lambda e: dialog.response(Gtk.ResponseType.OK))
 
         def on_response(d, response):
-            if response == Gtk.ResponseType.OK:
-                name = entry.get_text().strip()
-                if name:
-                    create_vhost(name, projects_dir)
-                    GLib.timeout_add(500, self._load_projects)
-            d.destroy()
+            if response != Gtk.ResponseType.OK:
+                d.destroy()
+                return
+
+            name = entry.get_text().strip()
+            if not name:
+                error_label.set_markup("<span color='red'>El nombre no puede estar vacío.</span>")
+                return
+
+            create_btn.set_sensitive(False)
+            create_btn.set_label("Creando…")
+
+            ok = create_vhost(name, projects_dir)
+            if ok:
+                self._set_status(True, f"Proyecto {name}.test creado correctamente.")
+                GLib.timeout_add(500, self._load_projects)
+                d.destroy()
+            else:
+                create_btn.set_sensitive(True)
+                create_btn.set_label("Crear")
+                error_label.set_markup(
+                    "<span color='red'>Error al crear el proyecto.\n"
+                    "Comprueba que la contraseña sudo es correcta y que Apache está instalado.</span>"
+                )
 
         dialog.connect("response", on_response)
         dialog.present()

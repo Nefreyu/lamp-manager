@@ -1,4 +1,6 @@
+import os
 import subprocess
+import tempfile
 from pathlib import Path
 from config.dev import DEV_MODE, SIMULATE_NOT_INSTALLED
 
@@ -21,7 +23,7 @@ def set_password(password: str):
 
 def validate_password(password: str) -> bool:
     result = subprocess.run(
-        ["sudo", "-S", "true"],
+        ["sudo", "-S", "-p", "", "true"],
         input=password + "\n",
         capture_output=True,
         text=True
@@ -29,16 +31,27 @@ def validate_password(password: str) -> bool:
     return result.returncode == 0
 
 
-def _run_sudo(command: list, stdin: str = "") -> bool:
+def _run_sudo(command: list) -> bool:
     if _sudo_password is None:
         return False
     result = subprocess.run(
-        ["sudo", "-S"] + command,
-        input=_sudo_password + "\n" + stdin,
+        ["sudo", "-S", "-p", ""] + command,
+        input=_sudo_password + "\n",
         capture_output=True,
         text=True
     )
     return result.returncode == 0
+
+
+def _sudo_write_file(dest_path: str, content: str) -> bool:
+    """Escribe contenido en un archivo privilegiado usando un fichero temporal."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".lamp-manager", delete=False) as f:
+        f.write(content)
+        tmp_path = f.name
+    try:
+        return _run_sudo(["cp", tmp_path, dest_path])
+    finally:
+        os.unlink(tmp_path)
 
 
 def get_status(service_id: str) -> bool:
@@ -51,10 +64,8 @@ def get_status(service_id: str) -> bool:
 
 
 def install_mailpit_service(storage_enabled: bool, storage_path: str) -> bool:
-    """Crea el archivo .service de Mailpit y lo activa."""
     exec_start = "/usr/local/bin/mailpit"
     if storage_enabled:
-        # Crear el directorio de almacenamiento si no existe
         storage_dir = str(Path(storage_path).parent)
         _run_sudo(["mkdir", "-p", storage_dir])
         exec_start += f" --database {storage_path}"
@@ -71,7 +82,7 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 """
-    if not _run_sudo(["tee", str(SYSTEMD_DIR / "mailpit.service")], stdin=service_content):
+    if not _sudo_write_file(str(SYSTEMD_DIR / "mailpit.service"), service_content):
         return False
 
     _run_sudo(["systemctl", "daemon-reload"])
@@ -80,7 +91,6 @@ WantedBy=multi-user.target
 
 
 def uninstall_mailpit_service() -> bool:
-    """Para, deshabilita y elimina el archivo .service de Mailpit."""
     _run_sudo(["systemctl", "stop", "mailpit"])
     _run_sudo(["systemctl", "disable", "mailpit"])
     return _run_sudo(["rm", str(SYSTEMD_DIR / "mailpit.service")])
@@ -93,13 +103,13 @@ def start_service(service_id: str) -> bool:
 def stop_service(service_id: str) -> bool:
     return _run_sudo(["systemctl", "stop", service_id])
 
+
 def is_installed(service: dict) -> bool:
     if DEV_MODE and service["id"] in SIMULATE_NOT_INSTALLED:
         return False
     binary = service.get("binary")
     if binary:
         return Path(binary).exists()
-    # Si no tiene binary, asumimos que está instalado si el paquete existe
     result = subprocess.run(
         ["which", service["id"]],
         capture_output=True, text=True
