@@ -6,6 +6,7 @@ from pages.servicios import ServiciosPage
 from pages.vhosts import VHostsPage
 from windows.password_dialog import PasswordDialog
 from services.systemd import set_password, validate_password
+from pages.ajustes import AjustesPage
 
 
 class MainWindow(Gtk.ApplicationWindow):
@@ -37,6 +38,10 @@ class MainWindow(Gtk.ApplicationWindow):
         btn_vhosts.connect("clicked", self.on_section_changed, "vhosts")
         sidebar.append(btn_vhosts)
 
+        btn_ajustes = Gtk.Button(label="Ajustes")
+        btn_ajustes.connect("clicked", self.on_section_changed, "ajustes")
+        sidebar.append(btn_ajustes)
+
         separator = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
         main_box.append(separator)
 
@@ -47,9 +52,9 @@ class MainWindow(Gtk.ApplicationWindow):
 
         self.stack.add_named(ServiciosPage(), "servicios")
         self.stack.add_named(VHostsPage(), "vhosts")
+        self.stack.add_named(AjustesPage(), "ajustes")
 
     def request_password(self):
-        print("Solicitando contraseña...")
         self.dialog = PasswordDialog(self, self.on_password_success, self.on_password_cancel)
         self.dialog.present()
 
