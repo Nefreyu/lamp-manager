@@ -79,7 +79,8 @@ def enable_https(name: str, projects_dir: str) -> bool:
     if result.returncode != 0:
         return False
     _run_sudo(["a2enmod", "ssl"])
-    docroot = str(Path(projects_dir) / name)
+    _run_sudo(["a2ensite", "default-ssl"])
+    docroot = _detect_docroot(projects_dir, name)
     if not _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, docroot, https=True)):
         return False
     return _run_sudo(["systemctl", "reload", "apache2"])
@@ -88,7 +89,7 @@ def enable_https(name: str, projects_dir: str) -> bool:
 def disable_https(name: str, projects_dir: str) -> bool:
     (CERTS_DIR / f"{name}.test.pem").unlink(missing_ok=True)
     (CERTS_DIR / f"{name}.test-key.pem").unlink(missing_ok=True)
-    docroot = str(Path(projects_dir) / name)
+    docroot = _detect_docroot(projects_dir, name)
     if not _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, docroot, https=False)):
         return False
     return _run_sudo(["systemctl", "reload", "apache2"])
@@ -109,7 +110,7 @@ def remove_hosts_entry(domain: str) -> bool:
 
 
 def generate_index_page(projects_dir: str) -> bool:
-    projects = list_projects(projects_dir)
+    projects = [p for p in list_projects(projects_dir) if vhost_is_enabled(p)]
     if projects:
         items = "\n".join(
             f'        <li><a href="http://{p}.test" target="_blank">{p}.test</a></li>'
@@ -165,8 +166,14 @@ def generate_index_page(projects_dir: str) -> bool:
     return _sudo_write_file(str(INDEX_PAGE), html)
 
 
+def _detect_docroot(projects_dir: str, name: str) -> str:
+    base = Path(projects_dir) / name
+    public = base / "public"
+    return str(public) if public.is_dir() else str(base)
+
+
 def create_vhost(name: str, projects_dir: str) -> bool:
-    docroot = str(Path(projects_dir) / name)
+    docroot = _detect_docroot(projects_dir, name)
     if not _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, docroot)):
         return False
     base_dir = Path(projects_dir)
@@ -176,6 +183,7 @@ def create_vhost(name: str, projects_dir: str) -> bool:
     Path(docroot).mkdir(parents=True, exist_ok=True)
     if not add_hosts_entry(f"{name}.test"):
         return False
+    _run_sudo(["a2enmod", "rewrite"])
     if not _run_sudo(["a2ensite", f"{name}.test.conf"]):
         return False
     _run_sudo(["systemctl", "reload", "apache2"])
@@ -196,13 +204,22 @@ def delete_vhost(name: str, projects_dir: str) -> bool:
     return True
 
 
-def enable_vhost(name: str) -> bool:
+def enable_vhost(name: str, projects_dir: str) -> bool:
+    if not add_hosts_entry(f"{name}.test"):
+        return False
     if not _run_sudo(["a2ensite", f"{name}.test.conf"]):
         return False
-    return _run_sudo(["systemctl", "reload", "apache2"])
+    if not _run_sudo(["systemctl", "reload", "apache2"]):
+        return False
+    generate_index_page(projects_dir)
+    return True
 
 
-def disable_vhost(name: str) -> bool:
+def disable_vhost(name: str, projects_dir: str) -> bool:
     if not _run_sudo(["a2dissite", f"{name}.test.conf"]):
         return False
-    return _run_sudo(["systemctl", "reload", "apache2"])
+    remove_hosts_entry(f"{name}.test")
+    if not _run_sudo(["systemctl", "reload", "apache2"]):
+        return False
+    generate_index_page(projects_dir)
+    return True

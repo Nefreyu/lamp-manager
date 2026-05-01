@@ -7,7 +7,8 @@ from config import settings
 from services.vhosts import (
     list_projects, vhost_config_path, vhost_is_enabled,
     create_vhost, delete_vhost, enable_vhost, disable_vhost,
-    is_mkcert_installed, vhost_has_https, enable_https, disable_https
+    is_mkcert_installed, vhost_has_https, enable_https, disable_https,
+    _detect_docroot
 )
 
 
@@ -62,7 +63,7 @@ class VHostRow(Gtk.Box):
         enabled = vhost_is_enabled(self.name)
         has_https = vhost_has_https(self.name)
         self.switch.set_active(enabled)
-        self.switch.set_sensitive(has_config)
+        self.switch.set_sensitive(True)
         self.link_button.set_sensitive(enabled)
         self.link_button.set_tooltip_text(
             f"https://{self.name}.test" if has_https else f"http://{self.name}.test"
@@ -105,10 +106,15 @@ class VHostRow(Gtk.Box):
     def on_switch_toggled(self, switch, state):
         if self._updating:
             return False
+        projects_dir = settings.get("general", "projects_dir")
         if state:
-            ok = enable_vhost(self.name)
+            has_config = vhost_config_path(self.name).exists()
+            if not has_config:
+                ok = create_vhost(self.name, projects_dir)
+            else:
+                ok = enable_vhost(self.name, projects_dir)
         else:
-            ok = disable_vhost(self.name)
+            ok = disable_vhost(self.name, projects_dir)
         if not ok:
             self.on_status(False, f"Error al {'activar' if state else 'desactivar'} {self.name}.test")
         GLib.timeout_add(500, self._refresh)
