@@ -1,10 +1,21 @@
+import re
 import shlex
+import subprocess
 from pathlib import Path
 from services.systemd import _run_sudo
 
 MODS_AVAILABLE = Path("/etc/apache2/mods-available")
 MODS_ENABLED = Path("/etc/apache2/mods-enabled")
 APACHE_ENVVARS = "/etc/apache2/envvars"
+
+
+def get_version() -> str | None:
+    result = subprocess.run(["apache2", "-v"], capture_output=True, text=True)
+    if result.returncode == 0:
+        m = re.search(r"Apache/(\S+)", result.stdout)
+        if m:
+            return m.group(1)
+    return None
 
 
 def _run_apache_cmd(command: list) -> bool:

@@ -6,8 +6,17 @@ from services.systemd import (
     start_service, stop_service, reload_service,
     install_mailpit_service, uninstall_mailpit_service
 )
+from services.apache import get_version as get_apache_version
+from services.mysql import get_version as get_mysql_version
+from services.php import get_version as get_php_version
 from config import settings
 from services.vhosts import APACHE_SITES_ENABLED
+
+_VERSION_FNS = {
+    "apache2": get_apache_version,
+    "mysql": get_mysql_version,
+    "php8.5-fpm": get_php_version,
+}
 
 
 class ServiceRow(Gtk.Box):
@@ -21,7 +30,13 @@ class ServiceRow(Gtk.Box):
         self._updating = False
 
         # Nombre como botón de navegación
-        name_btn = Gtk.Button(label=service["label"])
+        label_text = service["label"]
+        version_fn = _VERSION_FNS.get(self.service_id)
+        if version_fn:
+            version = version_fn()
+            if version:
+                label_text += f" {version}"
+        name_btn = Gtk.Button(label=label_text)
         name_btn.add_css_class("flat")
         name_btn.set_hexpand(True)
         name_btn.get_child().set_xalign(0)

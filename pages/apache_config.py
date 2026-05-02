@@ -1,6 +1,7 @@
 import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, Gio, GLib
+from pathlib import Path
 
 from services.apache import (
     list_available_modules, list_enabled_modules,
@@ -105,6 +106,7 @@ class ApacheConfigPage(Gtk.Box):
         btn.set_icon_name(icon)
         btn.set_tooltip_text(path)
         btn.set_valign(Gtk.Align.CENTER)
+        btn.set_sensitive(Path(path).exists())
         btn.connect("clicked", lambda _, p=path: self._open_file(p))
         row.append(btn)
 
@@ -114,7 +116,10 @@ class ApacheConfigPage(Gtk.Box):
         try:
             Gio.AppInfo.launch_default_for_uri(f"admin://{path}", None)
         except Exception:
-            Gio.AppInfo.launch_default_for_uri(f"file://{path}", None)
+            try:
+                Gio.AppInfo.launch_default_for_uri(f"file://{path}", None)
+            except Exception:
+                pass
 
     def _load_modules(self):
         while child := self.listbox.get_first_child():

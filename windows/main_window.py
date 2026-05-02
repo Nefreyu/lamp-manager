@@ -5,6 +5,8 @@ from gi.repository import Gtk, GLib
 from pages.servicios import ServiciosPage, ServiceConfigPage
 from pages.mailpit_config import MailpitConfigPage
 from pages.apache_config import ApacheConfigPage
+from pages.mysql_config import MysqlConfigPage
+from pages.php_config import PhpConfigPage
 from pages.vhosts import VHostsPage
 from windows.password_dialog import PasswordDialog
 from services.systemd import SERVICES, set_password, validate_password
@@ -63,7 +65,12 @@ class MainWindow(Gtk.ApplicationWindow):
         self.stack.add_named(VHostsPage(), "vhosts")
         self.stack.add_named(AjustesPage(), "ajustes")
 
-        config_pages = {"mailpit": MailpitConfigPage, "apache2": ApacheConfigPage}
+        config_pages = {
+            "mailpit": MailpitConfigPage,
+            "apache2": ApacheConfigPage,
+            "mysql": MysqlConfigPage,
+            "php8.5-fpm": PhpConfigPage,
+        }
         for service in SERVICES:
             page_class = config_pages.get(service["id"], ServiceConfigPage)
             page = page_class(service, self.navigate_to)
