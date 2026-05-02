@@ -1,5 +1,7 @@
 import gi
 import os
+from pathlib import Path
+
 try:
     from config.dev import DEV_MODE, SKIP_PASSWORD_DIALOG
 except ImportError:
@@ -10,8 +12,31 @@ gtk_modules = os.environ.get("GTK_MODULES", "")
 filtered = ":".join(m for m in gtk_modules.split(":") if m and m != "atk-bridge")
 os.environ["GTK_MODULES"] = filtered
 
+# Instalar icono en ~/.local/share/icons/ si se ejecuta desde el directorio de desarrollo
+_icon_src = Path(__file__).parent / "packaging/icons/hicolor/scalable/apps/io.github.nefreyu.LampManager.svg"
+if _icon_src.exists():
+    import subprocess
+    _hicolor = Path.home() / ".local/share/icons/hicolor"
+    _icon_dst = _hicolor / "scalable/apps/io.github.nefreyu.LampManager.svg"
+    _icon_dst.parent.mkdir(parents=True, exist_ok=True)
+    if not _icon_dst.exists():
+        _icon_dst.symlink_to(_icon_src.resolve())
+    _index = _hicolor / "index.theme"
+    _content = _index.read_text() if _index.exists() else ""
+    if "scalable/apps" not in _content:
+        _content = _content.rstrip()
+        if "Directories=" in _content:
+            _content = _content.replace(
+                next(l for l in _content.splitlines() if l.startswith("Directories=")),
+                next(l for l in _content.splitlines() if l.startswith("Directories=")) + ",scalable/apps"
+            )
+        _content += "\n\n[scalable/apps]\nSize=48\nType=Scalable\nMinSize=1\nMaxSize=256\n"
+        _index.write_text(_content)
+        subprocess.run(["gtk-update-icon-cache", "-f", str(_hicolor)], capture_output=True)
+
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk, GLib
+gi.require_version("Gdk", "4.0")
+from gi.repository import Gtk, GLib, Gdk
 
 from windows.main_window import MainWindow
 

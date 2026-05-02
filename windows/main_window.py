@@ -1,6 +1,7 @@
 import gi
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk, GLib
+gi.require_version("Adw", "1")
+from gi.repository import Gtk, GLib, Gio, Adw
 
 from pages.servicios import ServiciosPage, ServiceConfigPage
 from pages.mailpit_config import MailpitConfigPage
@@ -23,6 +24,17 @@ class MainWindow(Gtk.ApplicationWindow):
         self.set_titlebar(header)
         title = Gtk.Label(label="LAMP Manager")
         header.set_title_widget(title)
+
+        about_action = Gio.SimpleAction.new("about", None)
+        about_action.connect("activate", self.on_about)
+        self.add_action(about_action)
+
+        menu = Gio.Menu()
+        menu.append("Acerca de LAMP Manager", "win.about")
+        menu_btn = Gtk.MenuButton()
+        menu_btn.set_icon_name("open-menu-symbolic")
+        menu_btn.set_menu_model(menu)
+        header.pack_start(menu_btn)
 
         main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self.set_child(main_box)
@@ -107,3 +119,12 @@ class MainWindow(Gtk.ApplicationWindow):
 
     def on_section_changed(self, button, section):
         self.navigate_to(section)
+
+    def on_about(self, action, param):
+        dialog = Adw.AboutDialog()
+        dialog.set_application_name("LAMP Manager")
+        dialog.set_version("0.1.0")
+        dialog.set_developers(["Juan Diez"])
+        dialog.set_application_icon("io.github.nefreyu.LampManager")
+        dialog.set_license_type(Gtk.License.GPL_3_0)
+        dialog.present(self)
