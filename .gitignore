@@ -1,5 +1,7 @@
+.claude/
 .venv/
 __pycache__/
 *.pyc
 .env
 config/dev.py
+*.deb

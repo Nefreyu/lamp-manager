@@ -1,6 +1,10 @@
 import gi
 import os
-from config.dev import DEV_MODE, SKIP_PASSWORD_DIALOG
+try:
+    from config.dev import DEV_MODE, SKIP_PASSWORD_DIALOG
+except ImportError:
+    DEV_MODE = False
+    SKIP_PASSWORD_DIALOG = False
 
 gtk_modules = os.environ.get("GTK_MODULES", "")
 filtered = ":".join(m for m in gtk_modules.split(":") if m and m != "atk-bridge")
@@ -14,7 +18,7 @@ from windows.main_window import MainWindow
 
 class App(Gtk.Application):
     def __init__(self):
-        super().__init__(application_id="com.example.lampmanager")
+        super().__init__(application_id="io.github.nefreyu.LampManager")
         self.connect("activate", self.on_activate)
 
     def on_activate(self, app):

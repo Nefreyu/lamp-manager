@@ -2,7 +2,11 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
-from config.dev import DEV_MODE, SIMULATE_NOT_INSTALLED
+try:
+    from config.dev import DEV_MODE, SIMULATE_NOT_INSTALLED
+except ImportError:
+    DEV_MODE = False
+    SIMULATE_NOT_INSTALLED = []
 
 SERVICES = [
     {"id": "apache2",    "label": "Apache",     "optional": False, "binary": "/usr/sbin/apache2",    "url": "http://localhost", "reloadable": True},
@@ -64,12 +68,16 @@ def get_status(service_id: str) -> bool:
     return result.stdout.strip() == "active"
 
 
-def install_mailpit_service(storage_enabled: bool, storage_path: str, start: bool = True) -> bool:
+def install_mailpit_service(storage_enabled: bool, storage_path: str, smtp_port: int = 1025, max_messages: int = 500, start: bool = True) -> bool:
     exec_start = "/usr/local/bin/mailpit"
     if storage_enabled:
         storage_dir = str(Path(storage_path).parent)
         _run_sudo(["mkdir", "-p", storage_dir])
         exec_start += f" --database {storage_path}"
+    if smtp_port != 1025:
+        exec_start += f" --smtp 0.0.0.0:{smtp_port}"
+    if max_messages != 500:
+        exec_start += f" --max {max_messages}"
 
     service_content = f"""[Unit]
 Description=Mailpit

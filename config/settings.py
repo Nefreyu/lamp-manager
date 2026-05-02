@@ -8,6 +8,8 @@ DEFAULTS = {
     "mailpit": {
         "storage_enabled": "false",
         "storage_path": "/var/lib/mailpit/mailpit.db",
+        "smtp_port": "1025",
+        "max_messages": "500",
     },
     "general": {
         "projects_dir": str(Path.home() / "www"),

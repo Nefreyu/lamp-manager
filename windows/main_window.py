@@ -7,6 +7,7 @@ from pages.mailpit_config import MailpitConfigPage
 from pages.apache_config import ApacheConfigPage
 from pages.mysql_config import MysqlConfigPage
 from pages.php_config import PhpConfigPage
+from pages.phpmyadmin_config import PhpMyAdminConfigPage
 from pages.vhosts import VHostsPage
 from windows.password_dialog import PasswordDialog
 from services.systemd import SERVICES, set_password, validate_password
@@ -70,6 +71,7 @@ class MainWindow(Gtk.ApplicationWindow):
             "apache2": ApacheConfigPage,
             "mysql": MysqlConfigPage,
             "php8.5-fpm": PhpConfigPage,
+            "phpmyadmin": PhpMyAdminConfigPage,
         }
         for service in SERVICES:
             page_class = config_pages.get(service["id"], ServiceConfigPage)

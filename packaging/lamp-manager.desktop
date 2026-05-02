@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=LAMP Manager
+Comment=Gestiona tu stack LAMP en GNOME
+Exec=lamp-manager
+Icon=lamp-manager
+Terminal=false
+Type=Application
+Categories=System;Settings;
+Keywords=apache;mysql;php;lamp;server;web;
+StartupWMClass=lamp-manager
