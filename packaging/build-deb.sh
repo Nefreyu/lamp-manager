@@ -39,7 +39,7 @@ LAUNCHER
 chmod 755 "$PKG_DIR/usr/bin/lamp-manager"
 
 # Archivos de escritorio e icono
-cp "$SCRIPT_DIR/lamp-manager.desktop" "$PKG_DIR/usr/share/applications/"
+cp "$SCRIPT_DIR/io.github.nefreyu.LampManager.desktop" "$PKG_DIR/usr/share/applications/"
 cp "$SCRIPT_DIR/lamp-manager.svg" "$PKG_DIR/usr/share/icons/hicolor/scalable/apps/"
 
 # DEBIAN/control
