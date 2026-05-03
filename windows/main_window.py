@@ -82,11 +82,13 @@ class MainWindow(Gtk.ApplicationWindow):
             "mailpit": MailpitConfigPage,
             "apache2": ApacheConfigPage,
             "mysql": MysqlConfigPage,
-            "php8.5-fpm": PhpConfigPage,
             "phpmyadmin": PhpMyAdminConfigPage,
         }
         for service in SERVICES:
-            page_class = config_pages.get(service["id"], ServiceConfigPage)
+            if service["id"].endswith("-fpm"):
+                page_class = PhpConfigPage
+            else:
+                page_class = config_pages.get(service["id"], ServiceConfigPage)
             page = page_class(service, self.navigate_to)
             self.stack.add_named(page, f"service-{service['id']}")
 

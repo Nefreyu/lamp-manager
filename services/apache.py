@@ -10,7 +10,10 @@ APACHE_ENVVARS = "/etc/apache2/envvars"
 
 
 def get_version() -> str | None:
-    result = subprocess.run(["apache2", "-v"], capture_output=True, text=True)
+    try:
+        result = subprocess.run(["apache2", "-v"], capture_output=True, text=True)
+    except FileNotFoundError:
+        return None
     if result.returncode == 0:
         m = re.search(r"Apache/(\S+)", result.stdout)
         if m:

@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -8,12 +9,26 @@ except ImportError:
     DEV_MODE = False
     SIMULATE_NOT_INSTALLED = []
 
+_PHP_VERSIONS = ["8.5", "8.4", "8.3", "8.2", "8.1", "8.0"]
+
+
+def _detect_php_entry() -> dict:
+    for ver in _PHP_VERSIONS:
+        binary = f"/usr/sbin/php-fpm{ver}"
+        if Path(binary).exists():
+            return {"id": f"php{ver}-fpm", "label": "PHP-FPM", "optional": False, "binary": binary}
+    # PHP no encontrado: usar la versión más reciente como placeholder para mostrar "no instalado"
+    return {"id": f"php{_PHP_VERSIONS[0]}-fpm", "label": "PHP-FPM", "optional": False, "binary": f"/usr/sbin/php-fpm{_PHP_VERSIONS[0]}"}
+
+
+_PHP_ENTRY = _detect_php_entry()
+
 SERVICES = [
-    {"id": "apache2",    "label": "Apache",     "optional": False, "binary": "/usr/sbin/apache2",    "url": "http://localhost", "reloadable": True},
-    {"id": "mysql",      "label": "MySQL",        "optional": False, "binary": "/usr/sbin/mysqld"},
-    {"id": "php8.5-fpm", "label": "PHP-FPM", "optional": False, "binary": "/usr/sbin/php-fpm8.5"},
-    {"id": "phpmyadmin", "label": "phpMyAdmin",   "optional": False, "binary": "/usr/share/phpmyadmin/index.php", "url": "http://localhost/phpmyadmin", "web_only": True, "hide_if_absent": True},
-    {"id": "mailpit",    "label": "Mailpit",      "optional": True,  "binary": "/usr/local/bin/mailpit", "url": "http://localhost:8025"},
+    {"id": "apache2",    "label": "Apache",    "optional": False, "binary": "/usr/sbin/apache2",             "url": "http://localhost", "reloadable": True},
+    {"id": "mysql",      "label": "MySQL",     "optional": False, "binary": "/usr/sbin/mysqld"},
+    _PHP_ENTRY,
+    {"id": "phpmyadmin", "label": "phpMyAdmin","optional": False, "binary": "/usr/share/phpmyadmin/index.php","url": "http://localhost/phpmyadmin", "web_only": True, "hide_if_absent": True},
+    {"id": "mailpit",    "label": "Mailpit",   "optional": True,  "binary": "/usr/local/bin/mailpit",         "url": "http://localhost:8025"},
 ]
 
 SYSTEMD_DIR = Path("/etc/systemd/system")
@@ -127,8 +142,4 @@ def is_installed(service: dict) -> bool:
     binary = service.get("binary")
     if binary:
         return Path(binary).exists()
-    result = subprocess.run(
-        ["which", service["id"]],
-        capture_output=True, text=True
-    )
-    return result.returncode == 0
+    return shutil.which(service["id"]) is not None

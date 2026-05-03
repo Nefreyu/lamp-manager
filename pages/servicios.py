@@ -9,14 +9,95 @@ from services.systemd import (
 from services.apache import get_version as get_apache_version
 from services.mysql import get_version as get_mysql_version
 from services.php import get_version as get_php_version
+from services.recommendations import get_missing as get_missing_recommendations
 from config import settings
 from services.vhosts import APACHE_SITES_ENABLED
 
+_fpm_service = next((s for s in SERVICES if s["id"].endswith("-fpm")), None)
 _VERSION_FNS = {
     "apache2": get_apache_version,
     "mysql": get_mysql_version,
-    "php8.5-fpm": get_php_version,
 }
+if _fpm_service:
+    _VERSION_FNS[_fpm_service["id"]] = get_php_version
+
+
+class RecommendationsPanel(Gtk.Box):
+    def __init__(self):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.set_margin_bottom(4)
+        self.refresh()
+
+    def refresh(self):
+        child = self.get_first_child()
+        while child:
+            next_child = child.get_next_sibling()
+            self.remove(child)
+            child = next_child
+
+        missing = get_missing_recommendations()
+        self.set_visible(bool(missing))
+        if not missing:
+            return
+
+        header = Gtk.Label()
+        header.set_markup("<b>Servicios recomendados no instalados</b>")
+        header.set_xalign(0)
+        header.set_margin_bottom(6)
+        self.append(header)
+
+        for i, rec in enumerate(missing):
+            if i > 0:
+                self.append(Gtk.Separator())
+            self.append(self._build_row(rec))
+
+        self.append(Gtk.Separator())
+
+    def _build_row(self, rec: dict) -> Gtk.Box:
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        row.set_margin_top(6)
+        row.set_margin_bottom(6)
+
+        icon = Gtk.Image.new_from_icon_name("dialog-information-symbolic")
+        icon.set_valign(Gtk.Align.START)
+        icon.set_margin_top(2)
+        row.append(icon)
+
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        content.set_hexpand(True)
+
+        name = Gtk.Label()
+        name.set_markup(f"<b>{rec['label']}</b>")
+        name.set_xalign(0)
+        content.append(name)
+
+        desc = Gtk.Label(label=rec["description"])
+        desc.set_xalign(0)
+        desc.set_wrap(True)
+        desc.add_css_class("dim-label")
+        content.append(desc)
+
+        for opt in rec["commands"]:
+            cmd_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            cmd_row.set_margin_top(4)
+
+            cmd_label = Gtk.Label()
+            cmd_label.set_markup(f"<tt>{opt['cmd']}</tt>")
+            cmd_label.set_xalign(0)
+            cmd_label.set_hexpand(True)
+            cmd_row.append(cmd_label)
+
+            copy_btn = Gtk.Button(label="Copiar")
+            copy_btn.set_valign(Gtk.Align.CENTER)
+            copy_btn.set_tooltip_text(f"Copiar comando de {opt['label']}")
+            cmd = opt["cmd"]
+            copy_btn.connect("clicked", lambda _, c=cmd: self.get_clipboard().set(c))
+            cmd_row.append(copy_btn)
+
+            content.append(cmd_row)
+
+        row.append(content)
+        return row
 
 
 class ServiceRow(Gtk.Box):
@@ -32,7 +113,7 @@ class ServiceRow(Gtk.Box):
         # Nombre como botón de navegación
         label_text = service["label"]
         version_fn = _VERSION_FNS.get(self.service_id)
-        if version_fn:
+        if version_fn and is_installed(service):
             version = version_fn()
             if version:
                 label_text += f" {version}"
@@ -170,6 +251,9 @@ class ServiciosPage(Gtk.Box):
         self.append(title)
         self.append(Gtk.Separator())
 
+        self.recommendations_panel = RecommendationsPanel()
+        self.append(self.recommendations_panel)
+
         # Banner de aviso Apache+PHP-FPM
         self.fpm_banner = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         self.fpm_banner.set_margin_bottom(4)
@@ -207,13 +291,15 @@ class ServiciosPage(Gtk.Box):
 
     def _check_fpm_warning(self):
         apache = next((s for s in SERVICES if s["id"] == "apache2"), None)
-        fpm = next((s for s in SERVICES if s["id"] == "php8.5-fpm"), None)
+        fpm = next((s for s in SERVICES if s["id"].endswith("-fpm")), None)
         if apache and fpm and is_installed(apache) and is_installed(fpm):
-            show = get_status("apache2") and not get_status("php8.5-fpm")
+            show = get_status("apache2") and not get_status(fpm["id"])
             self.fpm_banner.set_visible(show)
 
     def on_start_fpm(self, button):
-        start_service("php8.5-fpm")
+        fpm = next((s for s in SERVICES if s["id"].endswith("-fpm")), None)
+        if fpm:
+            start_service(fpm["id"])
         GLib.timeout_add(500, self._after_start_fpm)
 
     def _after_start_fpm(self):
@@ -222,6 +308,7 @@ class ServiciosPage(Gtk.Box):
             row.refresh()
 
     def on_refresh(self, button):
+        self.recommendations_panel.refresh()
         for row in self.rows:
             row.refresh()
         self._check_fpm_warning()
