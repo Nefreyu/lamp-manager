@@ -1,6 +1,7 @@
 import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, Gio, GLib
+from pathlib import Path
 from services.systemd import (
     SERVICES, get_status, is_installed,
     start_service, stop_service, reload_service,
@@ -210,6 +211,10 @@ class ServiceRow(Gtk.Box):
             if self.optional:
                 self.install_button.set_label("Desinstalar servicio")
 
+        if self.optional:
+            binary = self.service.get("binary")
+            self.install_button.set_visible(Path(binary).exists() if binary else True)
+
         self._updating = False
 
     def on_switch_toggled(self, switch, state):
@@ -276,7 +281,8 @@ class ServiciosPage(Gtk.Box):
 
         self.rows = []
         for service in SERVICES:
-            if service.get("hide_if_absent") and not is_installed(service):
+            binary = service.get("binary")
+            if binary and not Path(binary).exists():
                 continue
             row = ServiceRow(service, navigate_to, on_changed=self._check_fpm_warning)
             self.append(row)
