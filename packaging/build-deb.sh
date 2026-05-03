@@ -50,6 +50,7 @@ Section: admin
 Priority: optional
 Architecture: $ARCH
 Depends: python3 (>= 3.10), python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1, gvfs-backends, sudo
+Recommends: apache2, php-fpm
 Maintainer: $MAINTAINER
 Description: LAMP stack manager for GNOME
  GTK4 application to manage Apache, MySQL, PHP-FPM and related

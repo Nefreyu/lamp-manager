@@ -19,7 +19,10 @@ def get_conf_path() -> str:
 
 
 def get_version() -> str | None:
-    result = subprocess.run(["mysql", "--version"], capture_output=True, text=True)
+    try:
+        result = subprocess.run(["mysql", "--version"], capture_output=True, text=True)
+    except FileNotFoundError:
+        return None
     if result.returncode == 0:
         m = re.search(r"(\d+\.\d+\.\d+)", result.stdout)
         if m:

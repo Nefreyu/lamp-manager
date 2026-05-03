@@ -4,9 +4,21 @@ from gi.repository import Gtk, Gio
 from pathlib import Path
 
 
+from services.systemd import _PHP_VERSIONS
+
 PHPMYADMIN_CONF = "/etc/phpmyadmin/config.inc.php"
 PHPMYADMIN_APACHE_CONF = "/etc/apache2/conf-available/phpmyadmin.conf"
-PHPMYADMIN_FPM_CONF = "/etc/phpmyadmin/php8.5-fpm.conf"
+
+
+def _detect_fpm_conf() -> str:
+    for ver in _PHP_VERSIONS:
+        path = f"/etc/phpmyadmin/php{ver}-fpm.conf"
+        if Path(path).exists():
+            return path
+    return f"/etc/phpmyadmin/php{_PHP_VERSIONS[0]}-fpm.conf"
+
+
+PHPMYADMIN_FPM_CONF = _detect_fpm_conf()
 
 
 class PhpMyAdminConfigPage(Gtk.Box):
