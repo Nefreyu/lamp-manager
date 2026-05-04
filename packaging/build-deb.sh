@@ -67,13 +67,15 @@ if command -v gtk-update-icon-cache > /dev/null; then
     gtk-update-icon-cache -f /usr/share/icons/hicolor
 fi
 
-echo ""
-echo "LAMP Manager instalado."
-echo "Esta aplicación requiere Apache, PHP-FPM y un servidor de base de datos"
-echo "para tener utilidad. Instálalos con:"
-echo ""
-echo "  sudo apt install apache2 php-fpm mysql-server"
-echo ""
+cat > /dev/tty << 'MSG'
+
+LAMP Manager instalado.
+Esta aplicación requiere Apache, PHP-FPM y un servidor de base de datos
+para tener utilidad. Instálalos con:
+
+  sudo apt install apache2 php-fpm mysql-server
+
+MSG
 POSTINST
 chmod 755 "$PKG_DIR/DEBIAN/postinst"
 

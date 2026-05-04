@@ -288,9 +288,6 @@ class ServiciosPage(Gtk.Box):
 
         self.rows = []
         for service in SERVICES:
-            binary = service.get("binary")
-            if binary and not Path(binary).exists():
-                continue
             row = ServiceRow(service, navigate_to, on_changed=self._check_fpm_warning)
             self.append(row)
             self.rows.append(row)
