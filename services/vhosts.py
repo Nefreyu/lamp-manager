@@ -10,6 +10,7 @@ HOSTS_MARKER = "# lamp-manager"
 APACHE_SITES_AVAILABLE = Path("/etc/apache2/sites-available")
 APACHE_SITES_ENABLED = Path("/etc/apache2/sites-enabled")
 INDEX_PAGE = Path("/var/www/html/index.html")
+INDEX_BACKUP = Path("/var/www/html/index.html.lamp-manager.bak")
 CERTS_DIR = Path.home() / ".local/share/lamp-manager/certs"
 
 
@@ -126,13 +127,20 @@ def remove_hosts_entry(domain: str) -> bool:
 
 def generate_index_page(projects_dir: str) -> bool:
     projects = [p for p in list_projects(projects_dir) if vhost_is_enabled(p)]
-    if projects:
-        items = "\n".join(
-            f'        <li><a href="http://{p}.test" target="_blank">{p}.test</a></li>'
-            for p in projects
-        )
-    else:
-        items = '        <li class="empty">No hay proyectos todavía.</li>'
+
+    if not projects:
+        if INDEX_BACKUP.exists():
+            _run_sudo(["cp", str(INDEX_BACKUP), str(INDEX_PAGE)])
+            _run_sudo(["rm", "-f", str(INDEX_BACKUP)])
+        return True
+
+    if INDEX_PAGE.exists() and not INDEX_BACKUP.exists():
+        _run_sudo(["cp", str(INDEX_PAGE), str(INDEX_BACKUP)])
+
+    items = "\n".join(
+        f'        <li><a href="http://{p}.test" target="_blank">{p}.test</a></li>'
+        for p in projects
+    )
 
     html = f"""<!DOCTYPE html>
 <html lang="es">
