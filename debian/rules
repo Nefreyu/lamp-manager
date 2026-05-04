@@ -1,0 +1,27 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_build:
+
+override_dh_auto_install:
+	install -d debian/lamp-manager/usr/lib/lamp-manager
+	cp -r main.py pages/ services/ windows/ config/ debian/lamp-manager/usr/lib/lamp-manager/
+	rm -f debian/lamp-manager/usr/lib/lamp-manager/config/dev.py
+	install -d debian/lamp-manager/usr/bin
+	install -m 755 debian/lamp-manager.launcher debian/lamp-manager/usr/bin/lamp-manager
+	install -d debian/lamp-manager/usr/share/applications
+	install -m 644 packaging/io.github.nefreyu.LampManager.desktop \
+		debian/lamp-manager/usr/share/applications/
+	install -d debian/lamp-manager/usr/share/icons/hicolor/scalable/apps
+	install -m 644 packaging/icons/hicolor/scalable/apps/io.github.nefreyu.LampManager.svg \
+		debian/lamp-manager/usr/share/icons/hicolor/scalable/apps/
+	install -d debian/lamp-manager/usr/share/metainfo
+	install -m 644 data/io.github.nefreyu.LampManager.metainfo.xml \
+		debian/lamp-manager/usr/share/metainfo/
+	install -d debian/lamp-manager/usr/share/man/man1
+	install -m 644 data/lamp-manager.1 \
+		debian/lamp-manager/usr/share/man/man1/
+
+override_dh_auto_test:

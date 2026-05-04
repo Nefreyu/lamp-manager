@@ -1,0 +1,24 @@
+Source: lamp-manager
+Section: admin
+Priority: optional
+Maintainer: Juan Diez <nefreyu.99@gmail.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://github.com/Nefreyu/lamp-manager
+Rules-Requires-Root: no
+
+Package: lamp-manager
+Architecture: all
+Depends: ${misc:Depends},
+ python3 (>= 3.10),
+ python3-gi,
+ gir1.2-gtk-4.0,
+ gvfs-backends,
+ sudo
+Recommends: apache2, php-fpm, default-mysql-server | mysql-server
+Description: LAMP stack manager for GNOME
+ GTK4 application to manage Apache, MySQL, PHP-FPM and related
+ services on a GNOME desktop environment.
+ .
+ Features include starting and stopping services, managing Apache
+ virtual hosts, editing php.ini parameters, and viewing service logs.

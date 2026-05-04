@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -24,11 +25,11 @@ def _detect_php_entry() -> dict:
 _PHP_ENTRY = _detect_php_entry()
 
 SERVICES = [
-    {"id": "apache2",    "label": "Apache",    "optional": False, "binary": "/usr/sbin/apache2",             "url": "http://localhost", "reloadable": True},
-    {"id": "mysql",      "label": "MySQL",     "optional": False, "binary": "/usr/sbin/mysqld"},
+    {"id": "apache2",    "label": "Apache",    "optional": False, "binary": "/usr/sbin/apache2",             "url": "http://localhost", "reloadable": True, "process": "apache2"},
+    {"id": "mysql",      "label": "MySQL",     "optional": False, "binary": "/usr/sbin/mysqld",                                                               "process": "mysqld"},
     _PHP_ENTRY,
     {"id": "phpmyadmin", "label": "phpMyAdmin","optional": False, "binary": "/usr/share/phpmyadmin/index.php","url": "http://localhost/phpmyadmin", "web_only": True},
-    {"id": "mailpit",    "label": "Mailpit",   "optional": True,  "binary": "/usr/local/bin/mailpit",         "url": "http://localhost:8025"},
+    {"id": "mailpit",    "label": "Mailpit",   "optional": True,  "binary": "/usr/local/bin/mailpit",         "url": "http://localhost:8025",                 "process": "mailpit"},
 ]
 
 SYSTEMD_DIR = Path("/etc/systemd/system")
@@ -155,6 +156,23 @@ def _run_sudo_output(command: list) -> str | None:
         text=True
     )
     return result.stdout if result.returncode == 0 else None
+
+
+def get_service_ports(process: str) -> list[int]:
+    output = _run_sudo_output(["ss", "-tlnp"])
+    if not output:
+        return []
+    ports = set()
+    for line in output.splitlines():
+        if process not in line:
+            continue
+        parts = line.split()
+        if len(parts) >= 4:
+            addr = parts[3]
+            port_str = addr.rsplit(":", 1)[-1]
+            if port_str.isdigit():
+                ports.add(int(port_str))
+    return sorted(ports)
 
 
 def read_log_tail(path: str, lines: int = 200) -> str | None:

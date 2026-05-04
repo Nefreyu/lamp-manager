@@ -5,3 +5,12 @@ __pycache__/
 .env
 config/dev.py
 *.deb
+*.dsc
+*.tar.xz
+*.buildinfo
+*.changes
+debian/lamp-manager/
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/*.substvars
