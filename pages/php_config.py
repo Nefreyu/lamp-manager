@@ -9,6 +9,7 @@ from services.php import (
     enable_extension, disable_extension,
     get_ini_value, set_ini_values, INI_PARAMS,
 )
+from pages.log_viewer import LogViewer
 
 
 class ExtensionRow(Gtk.ListBoxRow):
@@ -102,6 +103,11 @@ class PhpConfigPage(Gtk.Box):
         ext_box.append(scrolled)
 
         notebook.append_page(ext_box, Gtk.Label(label="Extensiones"))
+
+        # Pestaña Logs
+        log_page = LogViewer(f"/var/log/php{self.php_ver}-fpm.log")
+        log_page.set_margin_top(12)
+        notebook.append_page(log_page, Gtk.Label(label="Logs"))
 
         self._load_extensions()
 

@@ -7,6 +7,7 @@ from services.apache import (
     list_available_modules, list_enabled_modules,
     enable_module, disable_module
 )
+from pages.log_viewer import LogViewer
 
 APACHE_CONF = "/etc/apache2/apache2.conf"
 APACHE_ERROR_LOG = "/var/log/apache2/error.log"
@@ -63,20 +64,21 @@ class ApacheConfigPage(Gtk.Box):
         self.append(Gtk.Separator())
 
         self.append(self._file_row("Configuración principal", APACHE_CONF, "document-edit-symbolic"))
-        self.append(self._file_row("Log de errores", APACHE_ERROR_LOG, "dialog-warning-symbolic"))
-        self.append(self._file_row("Log de accesos", APACHE_ACCESS_LOG, "document-open-symbolic"))
 
         self.append(Gtk.Separator())
 
-        modules_title = Gtk.Label()
-        modules_title.set_markup("<span weight='bold'>Módulos</span>")
-        modules_title.set_xalign(0)
-        self.append(modules_title)
+        notebook = Gtk.Notebook()
+        notebook.set_vexpand(True)
+        self.append(notebook)
+
+        # Pestaña Módulos
+        modules_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        modules_box.set_margin_top(12)
 
         self.search_entry = Gtk.SearchEntry()
         self.search_entry.set_placeholder_text("Buscar módulo...")
         self.search_entry.connect("search-changed", self._on_search_changed)
-        self.append(self.search_entry)
+        modules_box.append(self.search_entry)
 
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_vexpand(True)
@@ -86,7 +88,19 @@ class ApacheConfigPage(Gtk.Box):
         self.listbox.add_css_class("boxed-list")
         self.listbox.set_filter_func(self._filter_func)
         scrolled.set_child(self.listbox)
-        self.append(scrolled)
+        modules_box.append(scrolled)
+
+        notebook.append_page(modules_box, Gtk.Label(label="Módulos"))
+
+        # Pestaña Log de errores
+        error_log = LogViewer(APACHE_ERROR_LOG)
+        error_log.set_margin_top(12)
+        notebook.append_page(error_log, Gtk.Label(label="Log de errores"))
+
+        # Pestaña Log de accesos
+        access_log = LogViewer(APACHE_ACCESS_LOG)
+        access_log.set_margin_top(12)
+        notebook.append_page(access_log, Gtk.Label(label="Log de accesos"))
 
         self._load_modules()
 
