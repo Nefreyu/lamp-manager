@@ -44,7 +44,7 @@ RECOMMENDATIONS = [
         "description": "Captura los correos enviados por las aplicaciones PHP para revisarlos sin enviarlos realmente.",
         "checks": ["/usr/local/bin/mailpit"],
         "commands": [
-            {"label": "Mailpit", "cmd": "sudo apt install mailpit"},
+            {"label": "Mailpit", "cmd": "sudo sh < <(curl -sL https://raw.githubusercontent.com/axllent/mailpit/develop/install.sh)"},
         ],
     },
 ]
