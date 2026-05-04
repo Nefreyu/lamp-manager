@@ -1,7 +1,16 @@
 import re
 import subprocess
 from pathlib import Path
-from services.systemd import _run_sudo
+from services.systemd import _run_sudo, _sudo_write_file
+
+INI_PARAMS = [
+    {"key": "memory_limit",        "label": "Límite de memoria",          "hint": "Ej: 128M, 256M, 512M"},
+    {"key": "upload_max_filesize", "label": "Tamaño máximo de subida",    "hint": "Ej: 2M, 10M, 50M"},
+    {"key": "post_max_size",       "label": "Tamaño máximo POST",         "hint": "Debe ser mayor que upload_max_filesize"},
+    {"key": "max_execution_time",  "label": "Tiempo máximo de ejecución", "hint": "En segundos. Ej: 30, 60, 120"},
+    {"key": "display_errors",      "label": "Mostrar errores",            "type": "bool"},
+    {"key": "date.timezone",       "label": "Zona horaria",               "hint": "Ej: Europe/Madrid"},
+]
 
 
 def get_installed_version() -> str | None:
@@ -21,6 +30,29 @@ def get_version() -> str | None:
         if m:
             return m.group(1)
     return None
+
+
+def get_ini_value(ver: str, key: str) -> str | None:
+    path = Path(f"/etc/php/{ver}/fpm/php.ini")
+    if not path.exists():
+        return None
+    m = re.search(rf"^{re.escape(key)}\s*=\s*(.+)$", path.read_text(), re.MULTILINE)
+    return m.group(1).strip() if m else None
+
+
+def set_ini_values(ver: str, values: dict[str, str]) -> bool:
+    path = f"/etc/php/{ver}/fpm/php.ini"
+    content = Path(path).read_text()
+    for key, value in values.items():
+        pattern = rf"^[ \t]*;?[ \t]*{re.escape(key)}[ \t]*=[ \t]*.*$"
+        replacement = f"{key} = {value}" if value else f";{key} ="
+        if re.search(pattern, content, re.MULTILINE):
+            content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
+        else:
+            content += f"\n{key} = {value}\n"
+    if not _sudo_write_file(path, content):
+        return False
+    return _run_sudo(["systemctl", "reload", f"php{ver}-fpm"])
 
 
 def list_available_extensions(ver: str) -> list[str]:
