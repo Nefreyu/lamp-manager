@@ -180,6 +180,13 @@ class ServiceRow(Gtk.Box):
     def refresh(self):
         self._updating = True
 
+        binary = self.service.get("binary")
+        if binary:
+            self.set_visible(Path(binary).exists())
+            if not self.get_visible():
+                self._updating = False
+                return
+
         if not is_installed(self.service):
             self.status_label.set_markup("<span color='orange'>⚠ no instalado</span>")
             if not self.web_only:
