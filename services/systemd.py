@@ -143,3 +143,27 @@ def is_installed(service: dict) -> bool:
     if binary:
         return Path(binary).exists()
     return shutil.which(service["id"]) is not None
+
+
+def _run_sudo_output(command: list) -> str | None:
+    if _sudo_password is None:
+        return None
+    result = subprocess.run(
+        ["sudo", "-S", "-p", ""] + command,
+        input=_sudo_password + "\n",
+        capture_output=True,
+        text=True
+    )
+    return result.stdout if result.returncode == 0 else None
+
+
+def read_log_tail(path: str, lines: int = 200) -> str | None:
+    if not Path(path).exists():
+        return None
+    result = subprocess.run(
+        ["tail", "-n", str(lines), path],
+        capture_output=True, text=True
+    )
+    if result.returncode == 0:
+        return result.stdout
+    return _run_sudo_output(["tail", "-n", str(lines), path])
