@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.nefreyu.LampManager</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <name>LAMP Manager</name>
+  <summary>Gestiona tu stack LAMP en GNOME</summary>
+
+  <description>
+    <p>LAMP Manager es una aplicación de escritorio para GNOME que permite gestionar los servicios de un stack LAMP (Apache, MySQL, PHP-FPM) de forma visual, sin necesidad de usar la terminal.</p>
+    <ul>
+      <li>Arrancar, parar y recargar servicios Apache, MySQL y PHP-FPM</li>
+      <li>Gestión de hosts virtuales de Apache</li>
+      <li>Editor de parámetros de php.ini</li>
+      <li>Visor de registros con colores por nivel de severidad</li>
+      <li>Detección de puertos en uso por cada servicio</li>
+      <li>Soporte para Mailpit como servidor de correo de desarrollo</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">io.github.nefreyu.LampManager.desktop</launchable>
+
+  <url type="homepage">https://github.com/Nefreyu/lamp-manager</url>
+  <url type="bugtracker">https://github.com/Nefreyu/lamp-manager/issues</url>
+
+  <developer id="io.github.nefreyu">
+    <name>Juan Diez</name>
+  </developer>
+
+  <content_rating type="oars-1.1"/>
+
+  <releases>
+    <release version="0.1.0" date="2026-05-04">
+      <description>
+        <p>Primera versión pública.</p>
+      </description>
+    </release>
+  </releases>
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+</component>

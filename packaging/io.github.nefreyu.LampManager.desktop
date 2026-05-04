@@ -1,5 +1,6 @@
 [Desktop Entry]
 Name=LAMP Manager
+GenericName=Gestor de stack LAMP
 Comment=Gestiona tu stack LAMP en GNOME
 Exec=lamp-manager
 Icon=io.github.nefreyu.LampManager

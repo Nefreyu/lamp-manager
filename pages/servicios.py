@@ -5,7 +5,8 @@ from pathlib import Path
 from services.systemd import (
     SERVICES, get_status, is_installed,
     start_service, stop_service, reload_service,
-    install_mailpit_service, uninstall_mailpit_service
+    install_mailpit_service, uninstall_mailpit_service,
+    get_service_ports,
 )
 from services.apache import get_version as get_apache_version
 from services.mysql import get_version as get_mysql_version
@@ -129,6 +130,11 @@ class ServiceRow(Gtk.Box):
         self.status_label = Gtk.Label()
         self.append(self.status_label)
 
+        # Puertos en uso
+        self.ports_label = Gtk.Label()
+        self.ports_label.add_css_class("dim-label")
+        self.append(self.ports_label)
+
         # Botón instalar/desinstalar (solo servicios opcionales)
         if self.optional:
             self.install_button = Gtk.Button()
@@ -221,6 +227,13 @@ class ServiceRow(Gtk.Box):
         if self.optional:
             binary = self.service.get("binary")
             self.install_button.set_visible(Path(binary).exists() if binary else True)
+
+        process = self.service.get("process")
+        if process:
+            ports = get_service_ports(process)
+            self.ports_label.set_text(" · ".join(f":{p}" for p in ports))
+        else:
+            self.ports_label.set_text("")
 
         self._updating = False
 
