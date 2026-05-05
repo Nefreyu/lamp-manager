@@ -22,7 +22,21 @@ A GTK4 graphical application to manage your LAMP stack on GNOME desktops. Start 
 
 ## Screenshots
 
-> Coming soon.
+### Services
+![Services](screenshots/services.png)
+
+### Virtual hosts
+![Virtual hosts](screenshots/vhosts.png)
+
+### PHP configuration
+![PHP configuration](screenshots/phpconfig.png)
+
+### PHP extensions
+![PHP extensions](screenshots/phpextensions.png)
+
+### Log viewer
+![Apache error log](screenshots/apachelogerror.png)
+![PHP log](screenshots/phplog.png)
 
 ---
 
