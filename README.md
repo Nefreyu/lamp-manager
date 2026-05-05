@@ -59,21 +59,21 @@ A GTK4 graphical application to manage your LAMP stack on GNOME desktops. Start 
 
 ## Installation
 
-### Option 1 — Download the .deb package
-
-Download the latest `.deb` from the [Releases page](https://github.com/Nefreyu/lamp-manager/releases) and install it:
-
-```bash
-sudo dpkg -i lamp-manager_0.1.1_all.deb
-sudo apt-get install -f   # installs any missing dependencies
-```
-
-### Option 2 — PPA (coming soon)
+### Option 1 — PPA (recommended)
 
 ```bash
 sudo add-apt-repository ppa:nefreyu-99/lamp-manager
 sudo apt update
 sudo apt install lamp-manager
+```
+
+### Option 2 — Download the .deb package
+
+Download the latest `.deb` from the [Releases page](https://github.com/Nefreyu/lamp-manager/releases) and install it:
+
+```bash
+sudo dpkg -i lamp-manager_0.1.2_all.deb
+sudo apt-get install -f   # installs any missing dependencies
 ```
 
 ### Option 3 — Run from source
