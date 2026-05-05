@@ -130,7 +130,6 @@ class ServiceRow(Gtk.Box):
         self.status_label = Gtk.Label()
         self.append(self.status_label)
 
-        # Puertos en uso
         self.ports_label = Gtk.Label()
         self.ports_label.add_css_class("dim-label")
         self.append(self.ports_label)
@@ -229,7 +228,7 @@ class ServiceRow(Gtk.Box):
             self.install_button.set_visible(Path(binary).exists() if binary else True)
 
         process = self.service.get("process")
-        if process:
+        if process and is_installed(self.service):
             ports = get_service_ports(process)
             self.ports_label.set_text(" · ".join(f":{p}" for p in ports))
         else:
