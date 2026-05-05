@@ -93,6 +93,14 @@ python3 main.py
 
 No virtual environment or pip packages are needed — the application relies entirely on system packages.
 
+If you prefer to use a virtual environment, create it with `--system-site-packages` so that GTK bindings remain accessible:
+
+```bash
+python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
+python3 main.py
+```
+
 ---
 
 ## Usage
