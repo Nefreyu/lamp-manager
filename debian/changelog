@@ -1,18 +1,12 @@
-lamp-manager (0.1.2) noble; urgency=medium
-
-  * Excluir directorio .venv del paquete fuente.
-
- -- Juan Diez <nefreyu.99@gmail.com>  Tue, 05 May 2026 17:00:00 +0200
-
-lamp-manager (0.1.1) noble; urgency=medium
-
-  * Corrección de empaquetado: correo del mantenedor y optimización
-    de detección de puertos por servicio.
-
- -- Juan Diez <nefreyu.99@gmail.com>  Tue, 05 May 2026 10:00:00 +0200
-
 lamp-manager (0.1.0) noble; urgency=medium
 
   * Initial release.
+  * GTK4 interface to manage Apache, MySQL and PHP-FPM services.
+  * Virtual host management with a2ensite/a2dissite integration.
+  * PHP configuration editor for common php.ini parameters.
+  * Service log viewer with color-coded severity levels.
+  * Mailpit email testing service integration.
+  * Port monitoring and Apache+PHP-FPM warning banner.
 
- -- Juan Diez <nefreyu.99@gmail.com>  Mon, 04 May 2026 12:00:00 +0200
+ -- Juan Díez <nefreyu.99@gmail.com>  Wed, 07 May 2026 10:00:00 +0200
+
