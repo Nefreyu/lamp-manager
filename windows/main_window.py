@@ -123,9 +123,10 @@ class MainWindow(Gtk.ApplicationWindow):
         self.navigate_to(section)
 
     def on_about(self, action, param):
+        from config.version import __version__
         dialog = Adw.AboutDialog()
         dialog.set_application_name("LAMP Manager")
-        dialog.set_version("0.1.0")
+        dialog.set_version(__version__)
         dialog.set_developers(["Juan Diez"])
         dialog.set_application_icon("io.github.nefreyu.LampManager")
         dialog.set_license_type(Gtk.License.GPL_3_0)
