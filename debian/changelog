@@ -1,3 +1,9 @@
+lamp-manager (0.1.0-1) noble; urgency=medium
+
+  * Fix dependency: replace gir1.2-adwaita-1 with gir1.2-adw-1.
+
+ -- Juan Díez <nefreyu.99@gmail.com>  Sun, 10 May 2026 03:40:19 +0200
+
 lamp-manager (0.1.0) noble; urgency=medium
 
   * Initial release.
