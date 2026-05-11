@@ -16,7 +16,7 @@ Depends: ${misc:Depends},
  gir1.2-adw-1,
  gvfs-backends,
  sudo
-Recommends: apache2, php-fpm, default-mysql-server | mysql-server
+Suggests: apache2, php-fpm, default-mysql-server | mysql-server
 Description: LAMP stack manager for GNOME
  GTK4 application to manage Apache, MySQL, PHP-FPM and related
  services on a GNOME desktop environment.
