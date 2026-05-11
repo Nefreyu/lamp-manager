@@ -10,6 +10,7 @@ from pages.mysql_config import MysqlConfigPage
 from pages.php_config import PhpConfigPage
 from pages.phpmyadmin_config import PhpMyAdminConfigPage
 from pages.vhosts import VHostsPage
+from pages.vhost_config import VHostConfigPage
 from windows.password_dialog import PasswordDialog
 from services.systemd import SERVICES, set_password, validate_password
 from pages.ajustes import AjustesPage
@@ -75,8 +76,10 @@ class MainWindow(Gtk.ApplicationWindow):
 
         self.servicios_page = ServiciosPage(self.navigate_to)
         self.stack.add_named(self.servicios_page, "servicios")
-        self.stack.add_named(VHostsPage(), "vhosts")
+        self.stack.add_named(VHostsPage(self.navigate_to_vhost_config), "vhosts")
         self.stack.add_named(AjustesPage(), "ajustes")
+        self.vhost_config_page = VHostConfigPage(self.navigate_to)
+        self.stack.add_named(self.vhost_config_page, "vhost-config")
 
         config_pages = {
             "mailpit": MailpitConfigPage,
@@ -91,6 +94,10 @@ class MainWindow(Gtk.ApplicationWindow):
                 page_class = config_pages.get(service["id"], ServiceConfigPage)
             page = page_class(service, self.navigate_to)
             self.stack.add_named(page, f"service-{service['id']}")
+
+    def navigate_to_vhost_config(self, name: str):
+        self.vhost_config_page.load(name)
+        self.navigate_to("vhost-config")
 
     def navigate_to(self, name: str):
         current = self.stack.get_visible_child_name()

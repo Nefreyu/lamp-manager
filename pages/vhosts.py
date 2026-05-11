@@ -4,30 +4,36 @@ gi.require_version("Gdk", "4.0")
 from gi.repository import Gtk, Gio, GLib, Gdk
 
 from config import settings
+import threading
 from services.vhosts import (
     list_projects, vhost_config_path, vhost_is_enabled,
     create_vhost, delete_vhost, enable_vhost, disable_vhost,
     is_mkcert_installed, vhost_has_https, enable_https, disable_https,
-    _detect_docroot
+    _detect_docroot, FRAMEWORKS, is_command_installed, scaffold_project
 )
 
 
 class VHostRow(Gtk.Box):
-    def __init__(self, name: str, on_deleted, on_status):
+    def __init__(self, name: str, on_deleted, on_status, on_configure):
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         self.name = name
         self.on_deleted = on_deleted
         self.on_status = on_status
         self._updating = False
 
-        label = Gtk.Label(label=name)
-        label.set_hexpand(True)
-        label.set_xalign(0)
-        self.append(label)
-
+        name_btn = Gtk.Button()
+        name_btn.add_css_class("flat")
+        name_btn.set_hexpand(True)
+        name_btn.connect("clicked", lambda _: on_configure(name))
+        btn_content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        name_label = Gtk.Label(label=name)
+        name_label.set_xalign(0)
+        btn_content.append(name_label)
         domain_label = Gtk.Label()
         domain_label.set_markup(f"<span color='gray'>{name}.test</span>")
-        self.append(domain_label)
+        btn_content.append(domain_label)
+        name_btn.set_child(btn_content)
+        self.append(name_btn)
 
         self.link_button = Gtk.Button()
         self.link_button.set_icon_name("web-browser-symbolic")
@@ -149,8 +155,9 @@ class VHostRow(Gtk.Box):
 
 
 class VHostsPage(Gtk.Box):
-    def __init__(self):
+    def __init__(self, navigate_to_vhost_config):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        self._navigate_to_vhost_config = navigate_to_vhost_config
         self.set_margin_top(24)
         self.set_margin_bottom(24)
         self.set_margin_start(24)
@@ -210,12 +217,14 @@ class VHostsPage(Gtk.Box):
             return
 
         for name in projects:
-            row = VHostRow(name, on_deleted=self._load_projects, on_status=self._set_status)
+            row = VHostRow(name, on_deleted=self._load_projects, on_status=self._set_status, on_configure=self._navigate_to_vhost_config)
             self.list_box.append(row)
 
     def on_new_project(self, button):
+        projects_dir = settings.get("general", "projects_dir")
+
         dialog = Gtk.Dialog(title="Nuevo proyecto", transient_for=self.get_root(), modal=True)
-        dialog.set_default_size(320, -1)
+        dialog.set_default_size(360, -1)
 
         content = dialog.get_content_area()
         content.set_spacing(12)
@@ -232,7 +241,26 @@ class VHostsPage(Gtk.Box):
         entry.set_placeholder_text("mi-proyecto")
         content.append(entry)
 
-        projects_dir = settings.get("general", "projects_dir")
+        fw_label = Gtk.Label(label="Framework:")
+        fw_label.set_xalign(0)
+        content.append(fw_label)
+
+        fw_model = Gtk.StringList()
+        for fw in FRAMEWORKS:
+            fw_model.append(fw["label"])
+        fw_dropdown = Gtk.DropDown(model=fw_model)
+        fw_dropdown.set_selected(0)
+        content.append(fw_dropdown)
+
+        fw_desc = Gtk.Label()
+        fw_desc.set_markup(f"<span color='gray' size='small'>{FRAMEWORKS[0]['description']}</span>")
+        fw_desc.set_xalign(0)
+        content.append(fw_desc)
+
+        warn_label = Gtk.Label(label="")
+        warn_label.set_xalign(0)
+        content.append(warn_label)
+
         info = Gtk.Label()
         info.set_markup(f"<span color='gray' size='small'>Se creará en {projects_dir}</span>")
         info.set_xalign(0)
@@ -242,10 +270,27 @@ class VHostsPage(Gtk.Box):
         error_label.set_xalign(0)
         content.append(error_label)
 
+        progress_label = Gtk.Label(label="")
+        progress_label.set_xalign(0)
+        content.append(progress_label)
+
         create_btn = dialog.add_button("Crear", Gtk.ResponseType.OK)
         dialog.add_button("Cancelar", Gtk.ResponseType.CANCEL)
         dialog.set_default_response(Gtk.ResponseType.OK)
 
+        def on_framework_changed(dropdown, _):
+            fw = FRAMEWORKS[dropdown.get_selected()]
+            fw_desc.set_markup(f"<span color='gray' size='small'>{fw['description']}</span>")
+            if fw["requires"] and not is_command_installed(fw["requires"]):
+                warn_label.set_markup(
+                    f"<span color='orange'>⚠ {fw['requires']} no está instalado</span>"
+                )
+                create_btn.set_sensitive(False)
+            else:
+                warn_label.set_markup("")
+                create_btn.set_sensitive(True)
+
+        fw_dropdown.connect("notify::selected", on_framework_changed)
         entry.connect("activate", lambda e: dialog.response(Gtk.ResponseType.OK))
 
         def on_response(d, response):
@@ -258,21 +303,40 @@ class VHostsPage(Gtk.Box):
                 error_label.set_markup("<span color='red'>El nombre no puede estar vacío.</span>")
                 return
 
+            fw = FRAMEWORKS[fw_dropdown.get_selected()]
             create_btn.set_sensitive(False)
             create_btn.set_label("Creando…")
+            error_label.set_markup("")
 
-            ok = create_vhost(name, projects_dir)
-            if ok:
-                self._set_status(True, f"Proyecto {name}.test creado correctamente.")
-                GLib.timeout_add(500, self._load_projects)
-                d.destroy()
-            else:
-                create_btn.set_sensitive(True)
-                create_btn.set_label("Crear")
-                error_label.set_markup(
-                    "<span color='red'>Error al crear el proyecto.\n"
-                    "Comprueba que la contraseña sudo es correcta y que Apache está instalado.</span>"
-                )
+            def run():
+                if fw["id"] != "php":
+                    def on_progress(msg):
+                        GLib.idle_add(progress_label.set_markup,
+                                      f"<span color='gray' size='small'>{msg}</span>")
+                    ok, err = scaffold_project(fw["id"], name, projects_dir, on_progress)
+                    if not ok:
+                        GLib.idle_add(error_label.set_markup,
+                                      f"<span color='red'>Error: {err}</span>")
+                        GLib.idle_add(create_btn.set_sensitive, True)
+                        GLib.idle_add(create_btn.set_label, "Crear")
+                        return
+
+                def finish():
+                    ok = create_vhost(name, projects_dir)
+                    if ok:
+                        self._set_status(True, f"Proyecto {name}.test creado correctamente.")
+                        GLib.timeout_add(500, self._load_projects)
+                        d.destroy()
+                    else:
+                        create_btn.set_sensitive(True)
+                        create_btn.set_label("Crear")
+                        error_label.set_markup(
+                            "<span color='red'>Error al crear el vhost. "
+                            "Comprueba los permisos sudo y que Apache está instalado.</span>"
+                        )
+                GLib.idle_add(finish)
+
+            threading.Thread(target=run, daemon=True).start()
 
         dialog.connect("response", on_response)
         dialog.present()

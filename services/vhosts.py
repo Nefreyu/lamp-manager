@@ -1,9 +1,72 @@
 import getpass
+import io
 import os
 import shutil
 import subprocess
+import urllib.request
+import zipfile
 from pathlib import Path
-from services.systemd import _run_sudo, _sudo_write_file
+from services.systemd import _run_sudo, _sudo_write_file, _run_sudo_output
+
+FRAMEWORKS = [
+    {"id": "php",       "label": "PHP básico",  "requires": None,       "description": "Sitio PHP sin framework"},
+    {"id": "laravel",   "label": "Laravel",     "requires": "composer", "description": "composer create-project laravel/laravel"},
+    {"id": "symfony",   "label": "Symfony",     "requires": "composer", "description": "composer create-project symfony/skeleton"},
+    {"id": "wordpress", "label": "WordPress",   "requires": None,       "description": "Descarga WordPress desde wordpress.org"},
+]
+
+
+def is_command_installed(cmd: str) -> bool:
+    return subprocess.run(["which", cmd], capture_output=True).returncode == 0
+
+
+def scaffold_project(framework_id: str, name: str, projects_dir: str, on_progress=None) -> tuple[bool, str | None]:
+    def progress(msg):
+        if on_progress:
+            on_progress(msg)
+    try:
+        base = Path(projects_dir) / name
+        if framework_id == "php":
+            base.mkdir(parents=True, exist_ok=True)
+        elif framework_id == "laravel":
+            progress("Instalando Laravel con Composer…")
+            result = subprocess.run(
+                ["composer", "create-project", "laravel/laravel", name],
+                cwd=projects_dir, capture_output=True, text=True
+            )
+            if result.returncode != 0:
+                return False, result.stderr or "Error al ejecutar Composer"
+        elif framework_id == "symfony":
+            progress("Instalando Symfony con Composer…")
+            result = subprocess.run(
+                ["composer", "create-project", "symfony/skeleton", name],
+                cwd=projects_dir, capture_output=True, text=True
+            )
+            if result.returncode != 0:
+                return False, result.stderr or "Error al ejecutar Composer"
+        elif framework_id == "wordpress":
+            progress("Descargando WordPress…")
+            with urllib.request.urlopen("https://wordpress.org/latest.zip") as response:
+                data = response.read()
+            progress("Extrayendo archivos…")
+            base.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(io.BytesIO(data)) as z:
+                for member in z.namelist():
+                    if not member.startswith("wordpress/"):
+                        continue
+                    rel = member[len("wordpress/"):]
+                    if not rel:
+                        continue
+                    target = base / rel
+                    if member.endswith("/"):
+                        target.mkdir(parents=True, exist_ok=True)
+                    else:
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        with z.open(member) as src, open(target, "wb") as dst:
+                            dst.write(src.read())
+        return True, None
+    except Exception as e:
+        return False, str(e)
 
 HOSTS_FILE = Path("/etc/hosts")
 HOSTS_MARKER = "# lamp-manager"
@@ -187,6 +250,39 @@ def generate_index_page(projects_dir: str) -> bool:
 </html>
 """
     return _sudo_write_file(str(INDEX_PAGE), html)
+
+
+def get_docroot(name: str) -> str:
+    config = vhost_config_path(name)
+    if not config.exists():
+        return ""
+    content = _run_sudo_output(["cat", str(config)])
+    if not content:
+        return ""
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("DocumentRoot "):
+            return stripped[len("DocumentRoot "):].strip()
+    return ""
+
+
+def update_docroot(name: str, new_docroot: str) -> bool:
+    config = vhost_config_path(name)
+    if not config.exists():
+        return False
+    lines = []
+    for line in config.read_text().splitlines():
+        stripped = line.strip()
+        indent = " " * (len(line) - len(line.lstrip()))
+        if stripped.startswith("DocumentRoot "):
+            lines.append(f"{indent}DocumentRoot {new_docroot}")
+        elif stripped.startswith("<Directory ") and stripped.endswith(">"):
+            lines.append(f"{indent}<Directory {new_docroot}>")
+        else:
+            lines.append(line)
+    if not _sudo_write_file(str(config), "\n".join(lines) + "\n"):
+        return False
+    return _run_sudo(["systemctl", "reload", "apache2"])
 
 
 def _detect_docroot(projects_dir: str, name: str) -> str:
