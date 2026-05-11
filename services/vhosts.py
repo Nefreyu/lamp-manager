@@ -1,6 +1,8 @@
 import getpass
 import io
+import json
 import os
+import shlex
 import shutil
 import subprocess
 import urllib.request
@@ -8,53 +10,91 @@ import zipfile
 from pathlib import Path
 from services.systemd import _run_sudo, _sudo_write_file, _run_sudo_output
 
-FRAMEWORKS = [
-    {"id": "php",       "label": "PHP básico",  "requires": None,       "description": "Sitio PHP sin framework"},
-    {"id": "laravel",   "label": "Laravel",     "requires": "composer", "description": "composer create-project laravel/laravel"},
-    {"id": "symfony",   "label": "Symfony",     "requires": "composer", "description": "composer create-project symfony/skeleton"},
-    {"id": "wordpress", "label": "WordPress",   "requires": None,       "description": "Descarga WordPress desde wordpress.org"},
+_FRAMEWORKS_FILE = Path.home() / ".config" / "lamp-manager" / "frameworks.json"
+
+_DEFAULT_FRAMEWORKS = [
+    {
+        "id": "php",
+        "label": "PHP básico",
+        "description": "Sitio PHP sin framework",
+    },
+    {
+        "id": "laravel",
+        "label": "Laravel",
+        "description": "composer create-project laravel/laravel",
+        "requires": "composer",
+        "command": "composer create-project laravel/laravel {name}",
+    },
+    {
+        "id": "symfony",
+        "label": "Symfony",
+        "description": "composer create-project symfony/skeleton",
+        "requires": "composer",
+        "command": "composer create-project symfony/skeleton {name}",
+    },
+    {
+        "id": "wordpress",
+        "label": "WordPress",
+        "description": "Descarga WordPress desde wordpress.org",
+        "zip_url": "https://wordpress.org/latest.zip",
+        "zip_strip_prefix": "wordpress/",
+    },
 ]
+
+
+def load_frameworks() -> list[dict]:
+    if _FRAMEWORKS_FILE.exists():
+        try:
+            return json.loads(_FRAMEWORKS_FILE.read_text())
+        except Exception:
+            pass
+    else:
+        try:
+            _FRAMEWORKS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            _FRAMEWORKS_FILE.write_text(
+                json.dumps(_DEFAULT_FRAMEWORKS, indent=2, ensure_ascii=False)
+            )
+        except Exception:
+            pass
+    return _DEFAULT_FRAMEWORKS
+
+
+FRAMEWORKS = load_frameworks()
 
 
 def is_command_installed(cmd: str) -> bool:
     return subprocess.run(["which", cmd], capture_output=True).returncode == 0
 
 
-def scaffold_project(framework_id: str, name: str, projects_dir: str, on_progress=None) -> tuple[bool, str | None]:
+def scaffold_project(framework: dict, name: str, projects_dir: str, on_progress=None) -> tuple[bool, str | None]:
     def progress(msg):
         if on_progress:
             on_progress(msg)
     try:
         base = Path(projects_dir) / name
-        if framework_id == "php":
-            base.mkdir(parents=True, exist_ok=True)
-        elif framework_id == "laravel":
-            progress("Instalando Laravel con Composer…")
+        command = framework.get("command")
+        zip_url = framework.get("zip_url")
+        zip_strip_prefix = framework.get("zip_strip_prefix", "")
+
+        if command:
+            cmd_str = command.replace("{name}", name).replace("{projects_dir}", projects_dir)
+            progress(f"Ejecutando: {cmd_str}…")
             result = subprocess.run(
-                ["composer", "create-project", "laravel/laravel", name],
-                cwd=projects_dir, capture_output=True, text=True
+                shlex.split(cmd_str), cwd=projects_dir, capture_output=True, text=True
             )
             if result.returncode != 0:
-                return False, result.stderr or "Error al ejecutar Composer"
-        elif framework_id == "symfony":
-            progress("Instalando Symfony con Composer…")
-            result = subprocess.run(
-                ["composer", "create-project", "symfony/skeleton", name],
-                cwd=projects_dir, capture_output=True, text=True
-            )
-            if result.returncode != 0:
-                return False, result.stderr or "Error al ejecutar Composer"
-        elif framework_id == "wordpress":
-            progress("Descargando WordPress…")
-            with urllib.request.urlopen("https://wordpress.org/latest.zip") as response:
+                return False, result.stderr or f"Error al ejecutar: {cmd_str}"
+        elif zip_url:
+            progress(f"Descargando {zip_url}…")
+            with urllib.request.urlopen(zip_url) as response:
                 data = response.read()
             progress("Extrayendo archivos…")
             base.mkdir(parents=True, exist_ok=True)
             with zipfile.ZipFile(io.BytesIO(data)) as z:
                 for member in z.namelist():
-                    if not member.startswith("wordpress/"):
+                    if zip_strip_prefix and not member.startswith(zip_strip_prefix):
                         continue
-                    rel = member[len("wordpress/"):]
+                    rel = member[len(zip_strip_prefix):]
                     if not rel:
                         continue
                     target = base / rel
@@ -64,6 +104,8 @@ def scaffold_project(framework_id: str, name: str, projects_dir: str, on_progres
                         target.parent.mkdir(parents=True, exist_ok=True)
                         with z.open(member) as src, open(target, "wb") as dst:
                             dst.write(src.read())
+        else:
+            base.mkdir(parents=True, exist_ok=True)
         return True, None
     except Exception as e:
         return False, str(e)
@@ -300,6 +342,12 @@ def create_vhost(name: str, projects_dir: str) -> bool:
         user = getpass.getuser()
         _run_sudo(["chown", "-R", f"{user}:{user}", str(base_dir)])
     Path(docroot).mkdir(parents=True, exist_ok=True)
+    project_dir = Path(projects_dir) / name
+    if project_dir.exists():
+        user = getpass.getuser()
+        _run_sudo(["chown", "-R", f"www-data:{user}", str(project_dir)])
+        _run_sudo(["chmod", "-R", "ug+rwX", str(project_dir)])
+        _run_sudo(["find", str(project_dir), "-type", "d", "-exec", "chmod", "g+s", "{}", "+"])
     if not add_hosts_entry(f"{name}.test"):
         return False
     _run_sudo(["a2enmod", "rewrite"])

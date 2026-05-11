@@ -281,7 +281,7 @@ class VHostsPage(Gtk.Box):
         def on_framework_changed(dropdown, _):
             fw = FRAMEWORKS[dropdown.get_selected()]
             fw_desc.set_markup(f"<span color='gray' size='small'>{fw['description']}</span>")
-            if fw["requires"] and not is_command_installed(fw["requires"]):
+            if fw.get("requires") and not is_command_installed(fw["requires"]):
                 warn_label.set_markup(
                     f"<span color='orange'>⚠ {fw['requires']} no está instalado</span>"
                 )
@@ -309,17 +309,16 @@ class VHostsPage(Gtk.Box):
             error_label.set_markup("")
 
             def run():
-                if fw["id"] != "php":
-                    def on_progress(msg):
-                        GLib.idle_add(progress_label.set_markup,
-                                      f"<span color='gray' size='small'>{msg}</span>")
-                    ok, err = scaffold_project(fw["id"], name, projects_dir, on_progress)
-                    if not ok:
-                        GLib.idle_add(error_label.set_markup,
-                                      f"<span color='red'>Error: {err}</span>")
-                        GLib.idle_add(create_btn.set_sensitive, True)
-                        GLib.idle_add(create_btn.set_label, "Crear")
-                        return
+                def on_progress(msg):
+                    GLib.idle_add(progress_label.set_markup,
+                                  f"<span color='gray' size='small'>{msg}</span>")
+                ok, err = scaffold_project(fw, name, projects_dir, on_progress)
+                if not ok:
+                    GLib.idle_add(error_label.set_markup,
+                                  f"<span color='red'>Error: {err}</span>")
+                    GLib.idle_add(create_btn.set_sensitive, True)
+                    GLib.idle_add(create_btn.set_label, "Crear")
+                    return
 
                 def finish():
                     ok = create_vhost(name, projects_dir)
