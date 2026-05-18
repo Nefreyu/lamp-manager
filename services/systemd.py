@@ -1,5 +1,6 @@
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -62,6 +63,38 @@ def _run_sudo(command: list) -> bool:
         text=True
     )
     return result.returncode == 0
+
+
+def _run_sudo_feed(command: list, data: str) -> bool:
+    """Ejecuta `command` con `data` como stdin usando ficheros temporales para evitar
+    problemas de buffering de sudo al leer la contraseña desde el pipe."""
+    if _sudo_password is None:
+        return False
+    data_file = script_file = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".lamp-manager.sql", delete=False) as f:
+            f.write(data)
+            data_file = f.name
+        cmd_str = " ".join(shlex.quote(c) for c in command)
+        script = f"#!/bin/sh\n{cmd_str} < {shlex.quote(data_file)}\n"
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".lamp-manager.sh", delete=False) as sf:
+            sf.write(script)
+            script_file = sf.name
+        os.chmod(script_file, 0o755)
+        result = subprocess.run(
+            ["sudo", "-S", "-p", "", script_file],
+            input=_sudo_password + "\n",
+            capture_output=True,
+            text=True,
+        )
+        return result.returncode == 0
+    finally:
+        for path in (data_file, script_file):
+            if path:
+                try:
+                    os.unlink(path)
+                except Exception:
+                    pass
 
 
 def _sudo_write_file(dest_path: str, content: str) -> bool:

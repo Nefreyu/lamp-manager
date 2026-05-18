@@ -3,12 +3,12 @@ import io
 import json
 import os
 import shlex
-import shutil
 import subprocess
 import urllib.request
 import zipfile
+from datetime import datetime
 from pathlib import Path
-from services.systemd import _run_sudo, _sudo_write_file, _run_sudo_output
+from services.systemd import _run_sudo, _sudo_write_file, _run_sudo_output, _run_sudo_feed
 
 _FRAMEWORKS_FILE = Path.home() / ".config" / "lamp-manager" / "frameworks.json"
 
@@ -117,6 +117,7 @@ APACHE_SITES_ENABLED = Path("/etc/apache2/sites-enabled")
 INDEX_PAGE = Path("/var/www/html/index.html")
 INDEX_BACKUP = Path("/var/www/html/index.html.lamp-manager.bak")
 CERTS_DIR = Path.home() / ".local/share/lamp-manager/certs"
+TRASH_DIR = Path.home() / ".local/share/lamp-manager/trash"
 
 
 def list_projects(projects_dir: str) -> list[str]:
@@ -354,8 +355,27 @@ def create_vhost(name: str, projects_dir: str) -> bool:
     if not _run_sudo(["a2ensite", f"{name}.test.conf"]):
         return False
     _run_sudo(["systemctl", "reload", "apache2"])
+    create_database(name)
     generate_index_page(projects_dir)
     return True
+
+
+def create_database(name: str) -> bool:
+    if not is_command_installed("mysql"):
+        return False
+    return _run_sudo([
+        "mysql", "-e",
+        f"CREATE DATABASE IF NOT EXISTS `{name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
+    ])
+
+
+def database_exists(name: str) -> bool:
+    result = _run_sudo_output(["mysql", "--batch", "--skip-column-names", "-e", f"SHOW DATABASES LIKE '{name}'"])
+    return bool(result and name in result)
+
+
+def drop_database(name: str) -> bool:
+    return _run_sudo(["mysql", "-e", f"DROP DATABASE IF EXISTS `{name}`"])
 
 
 def delete_vhost(name: str, projects_dir: str) -> bool:
@@ -365,7 +385,7 @@ def delete_vhost(name: str, projects_dir: str) -> bool:
     _run_sudo(["systemctl", "reload", "apache2"])
     project_dir = Path(projects_dir) / name
     if project_dir.exists():
-        shutil.rmtree(project_dir)
+        _run_sudo(["rm", "-rf", str(project_dir)])
     disable_https(name, projects_dir)
     generate_index_page(projects_dir)
     return True
@@ -389,4 +409,121 @@ def disable_vhost(name: str, projects_dir: str) -> bool:
     if not _run_sudo(["systemctl", "reload", "apache2"]):
         return False
     generate_index_page(projects_dir)
+    return True
+
+
+def trash_vhost(name: str, projects_dir: str) -> bool:
+    trash_id = f"{name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    item_dir = TRASH_DIR / trash_id
+    item_dir.mkdir(parents=True, exist_ok=True)
+
+    meta = {
+        "trash_id": trash_id,
+        "name": name,
+        "projects_dir": projects_dir,
+        "deleted_at": datetime.now().isoformat(),
+        "has_db": False,
+    }
+
+    config_content = _run_sudo_output(["cat", str(vhost_config_path(name))])
+    if config_content:
+        (item_dir / "vhost.conf").write_text(config_content)
+
+    _run_sudo(["a2dissite", f"{name}.test.conf"])
+    remove_hosts_entry(f"{name}.test")
+    _run_sudo(["systemctl", "reload", "apache2"])
+    _run_sudo(["rm", "-f", str(vhost_config_path(name))])
+
+    if database_exists(name) and is_command_installed("mysqldump"):
+        dump = _run_sudo_output(["mysqldump", "--databases", name, "--default-character-set=utf8mb4"])
+        if dump:
+            (item_dir / "database.sql").write_text(dump)
+            meta["has_db"] = True
+        drop_database(name)
+
+    cert = CERTS_DIR / f"{name}.test.pem"
+    key = CERTS_DIR / f"{name}.test-key.pem"
+    if cert.exists() or key.exists():
+        certs_bak = item_dir / "certs"
+        certs_bak.mkdir(exist_ok=True)
+        for f in (cert, key):
+            if f.exists():
+                (certs_bak / f.name).write_bytes(f.read_bytes())
+                f.unlink()
+
+    project_dir = Path(projects_dir) / name
+    if project_dir.exists():
+        _run_sudo(["mv", str(project_dir), str(item_dir / "files")])
+
+    (item_dir / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False))
+    generate_index_page(projects_dir)
+    return True
+
+
+def list_trash() -> list[dict]:
+    if not TRASH_DIR.exists():
+        return []
+    items = []
+    for item_dir in TRASH_DIR.iterdir():
+        meta_path = item_dir / "meta.json"
+        if meta_path.exists():
+            try:
+                items.append(json.loads(meta_path.read_text()))
+            except Exception:
+                pass
+    return sorted(items, key=lambda x: x.get("deleted_at", ""), reverse=True)
+
+
+def restore_vhost(trash_id: str) -> bool:
+    item_dir = TRASH_DIR / trash_id
+    meta_path = item_dir / "meta.json"
+    if not meta_path.exists():
+        return False
+
+    meta = json.loads(meta_path.read_text())
+    name = meta["name"]
+    projects_dir = meta["projects_dir"]
+
+    files_dir = item_dir / "files"
+    project_dir = Path(projects_dir) / name
+    if files_dir.exists():
+        Path(projects_dir).mkdir(parents=True, exist_ok=True)
+        _run_sudo(["mv", str(files_dir), str(project_dir)])
+
+    certs_bak = item_dir / "certs"
+    if certs_bak.exists():
+        CERTS_DIR.mkdir(parents=True, exist_ok=True)
+        for cert_file in certs_bak.iterdir():
+            (CERTS_DIR / cert_file.name).write_bytes(cert_file.read_bytes())
+
+    conf_backup = item_dir / "vhost.conf"
+    if conf_backup.exists():
+        _sudo_write_file(str(vhost_config_path(name)), conf_backup.read_text())
+    else:
+        docroot = _detect_docroot(projects_dir, name)
+        _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, docroot))
+
+    add_hosts_entry(f"{name}.test")
+    _run_sudo(["a2ensite", f"{name}.test.conf"])
+    _run_sudo(["systemctl", "reload", "apache2"])
+
+    if project_dir.exists():
+        user = getpass.getuser()
+        _run_sudo(["chown", "-R", f"www-data:{user}", str(project_dir)])
+        _run_sudo(["chmod", "-R", "ug+rwX", str(project_dir)])
+        _run_sudo(["find", str(project_dir), "-type", "d", "-exec", "chmod", "g+s", "{}", "+"])
+
+    db_dump = item_dir / "database.sql"
+    if db_dump.exists() and is_command_installed("mysql"):
+        _run_sudo_feed(["mysql"], db_dump.read_text())
+
+    _run_sudo(["rm", "-rf", str(item_dir)])
+    generate_index_page(projects_dir)
+    return True
+
+
+def purge_trash_item(trash_id: str) -> bool:
+    item_dir = TRASH_DIR / trash_id
+    if item_dir.exists():
+        _run_sudo(["rm", "-rf", str(item_dir)])
     return True

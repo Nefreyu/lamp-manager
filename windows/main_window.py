@@ -11,6 +11,7 @@ from pages.php_config import PhpConfigPage
 from pages.phpmyadmin_config import PhpMyAdminConfigPage
 from pages.vhosts import VHostsPage
 from pages.vhost_config import VHostConfigPage
+from pages.vhost_trash import VHostTrashPage
 from windows.password_dialog import PasswordDialog
 from services.systemd import SERVICES, set_password, validate_password
 from pages.ajustes import AjustesPage
@@ -76,7 +77,10 @@ class MainWindow(Gtk.ApplicationWindow):
 
         self.servicios_page = ServiciosPage(self.navigate_to)
         self.stack.add_named(self.servicios_page, "servicios")
-        self.stack.add_named(VHostsPage(self.navigate_to_vhost_config), "vhosts")
+        self.vhosts_page = VHostsPage(self.navigate_to_vhost_config, self.navigate_to)
+        self.stack.add_named(self.vhosts_page, "vhosts")
+        self.vhost_trash_page = VHostTrashPage(self.navigate_to)
+        self.stack.add_named(self.vhost_trash_page, "vhost-trash")
         self.stack.add_named(AjustesPage(), "ajustes")
         self.vhost_config_page = VHostConfigPage(self.navigate_to)
         self.stack.add_named(self.vhost_config_page, "vhost-config")
@@ -110,6 +114,10 @@ class MainWindow(Gtk.ApplicationWindow):
         self.stack.set_visible_child_name(name)
         if name == "servicios":
             GLib.idle_add(self.servicios_page.on_refresh, None)
+        elif name == "vhosts":
+            GLib.idle_add(self.vhosts_page.refresh)
+        elif name == "vhost-trash":
+            GLib.idle_add(self.vhost_trash_page.refresh)
 
     def request_password(self):
         self.dialog = PasswordDialog(self, self.on_password_success, self.on_password_cancel)

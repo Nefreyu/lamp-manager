@@ -7,9 +7,10 @@ from config import settings
 import threading
 from services.vhosts import (
     list_projects, vhost_config_path, vhost_is_enabled,
-    create_vhost, delete_vhost, enable_vhost, disable_vhost,
+    create_vhost, enable_vhost, disable_vhost,
     is_mkcert_installed, vhost_has_https, enable_https, disable_https,
-    _detect_docroot, FRAMEWORKS, is_command_installed, scaffold_project
+    _detect_docroot, FRAMEWORKS, is_command_installed, scaffold_project,
+    trash_vhost,
 )
 
 
@@ -127,37 +128,37 @@ class VHostRow(Gtk.Box):
         return False
 
     def on_delete_clicked(self, button):
-        dialog = Gtk.AlertDialog()
-        dialog.set_message(f"¿Eliminar {self.name}?")
         projects_dir = settings.get("general", "projects_dir")
+        dialog = Gtk.AlertDialog()
+        dialog.set_message(f"¿Mover {self.name} a la papelera?")
         dialog.set_detail(
-            f"Se eliminarán la configuración de Apache, la entrada en /etc/hosts "
-            f"y el directorio {projects_dir}/{self.name}.\n\n"
-            f"Esta acción no se puede deshacer."
+            f"La configuración de Apache, los archivos y la base de datos "
+            f"se moverán a la papelera. Podrás restaurarlos desde la sección Papelera."
         )
-        dialog.set_buttons(["Cancelar", "Eliminar"])
+        dialog.set_buttons(["Cancelar", "Mover a la papelera"])
         dialog.set_default_button(0)
         dialog.set_cancel_button(0)
-        dialog.choose(self.get_root(), None, self._on_delete_confirmed)
+        dialog.choose(self.get_root(), None, self._on_trash_confirmed)
 
-    def _on_delete_confirmed(self, dialog, result):
+    def _on_trash_confirmed(self, dialog, result):
         try:
             index = dialog.choose_finish(result)
         except Exception:
             return
         if index == 1:
             projects_dir = settings.get("general", "projects_dir")
-            ok = delete_vhost(self.name, projects_dir)
+            ok = trash_vhost(self.name, projects_dir)
             if ok:
                 self.on_deleted()
             else:
-                self.on_status(False, f"Error al eliminar {self.name}: comprueba los permisos sudo")
+                self.on_status(False, f"Error al mover {self.name} a la papelera")
 
 
 class VHostsPage(Gtk.Box):
-    def __init__(self, navigate_to_vhost_config):
+    def __init__(self, navigate_to_vhost_config, navigate_to):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self._navigate_to_vhost_config = navigate_to_vhost_config
+        self._navigate_to = navigate_to
         self.set_margin_top(24)
         self.set_margin_bottom(24)
         self.set_margin_start(24)
@@ -178,6 +179,12 @@ class VHostsPage(Gtk.Box):
         title.set_hexpand(True)
         title.set_xalign(0)
         header_box.append(title)
+
+        trash_btn = Gtk.Button()
+        trash_btn.set_icon_name("user-trash-symbolic")
+        trash_btn.set_tooltip_text("Papelera")
+        trash_btn.connect("clicked", lambda _: self._navigate_to("vhost-trash"))
+        header_box.append(trash_btn)
 
         new_btn = Gtk.Button(label="Nuevo proyecto")
         new_btn.set_icon_name("list-add-symbolic")
@@ -202,6 +209,9 @@ class VHostsPage(Gtk.Box):
         self.status_label.set_markup(f"<span color='{color}'>{message}</span>")
         if success:
             GLib.timeout_add_seconds(15, lambda: self.status_label.set_markup("") or False)
+
+    def refresh(self):
+        self._load_projects()
 
     def _load_projects(self):
         while child := self.list_box.get_first_child():
