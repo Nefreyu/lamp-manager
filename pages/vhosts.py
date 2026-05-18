@@ -54,13 +54,13 @@ class VHostRow(Gtk.Box):
         self.switch.connect("state-set", self.on_switch_toggled)
         self.append(self.switch)
 
-        delete_btn = Gtk.Button()
-        delete_btn.set_icon_name("edit-delete-symbolic")
-        delete_btn.set_tooltip_text("Eliminar proyecto")
-        delete_btn.set_valign(Gtk.Align.CENTER)
-        delete_btn.add_css_class("destructive-action")
-        delete_btn.connect("clicked", self.on_delete_clicked)
-        self.append(delete_btn)
+        self.delete_btn = Gtk.Button()
+        self.delete_btn.set_icon_name("edit-delete-symbolic")
+        self.delete_btn.set_tooltip_text("Eliminar proyecto")
+        self.delete_btn.set_valign(Gtk.Align.CENTER)
+        self.delete_btn.add_css_class("destructive-action")
+        self.delete_btn.connect("clicked", self.on_delete_clicked)
+        self.append(self.delete_btn)
 
         self._refresh()
 
@@ -144,11 +144,26 @@ class VHostRow(Gtk.Box):
         except Exception:
             return
         if index == 1:
-            ok = trash_vhost(self.name)
-            if ok:
-                self.on_deleted()
-            else:
-                self.on_status(False, f"Error al mover {self.name} a la papelera")
+            self.switch.set_sensitive(False)
+            self.link_button.set_sensitive(False)
+            self.https_button.set_sensitive(False)
+            self.delete_btn.set_sensitive(False)
+
+            def run():
+                ok = trash_vhost(self.name)
+                if ok:
+                    GLib.idle_add(self.on_deleted)
+                else:
+                    GLib.idle_add(self._after_trash_error)
+
+            threading.Thread(target=run, daemon=True).start()
+
+    def _after_trash_error(self):
+        self.switch.set_sensitive(True)
+        self.https_button.set_sensitive(True)
+        self.delete_btn.set_sensitive(True)
+        self._refresh()
+        self.on_status(False, f"Error al mover {self.name} a la papelera")
 
 
 class VHostsPage(Gtk.Box):
