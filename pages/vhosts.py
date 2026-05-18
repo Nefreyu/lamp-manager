@@ -9,7 +9,7 @@ from services.vhosts import (
     list_projects, vhost_config_path, vhost_is_enabled,
     create_vhost, enable_vhost, disable_vhost,
     is_mkcert_installed, vhost_has_https, enable_https, disable_https,
-    _detect_docroot, FRAMEWORKS, is_command_installed, scaffold_project,
+    FRAMEWORKS, is_command_installed, scaffold_project,
     trash_vhost,
 )
 
@@ -103,32 +103,30 @@ class VHostRow(Gtk.Box):
             dialog.show(self.get_root())
             return
 
-        projects_dir = settings.get("general", "projects_dir")
         if vhost_has_https(self.name):
-            disable_https(self.name, projects_dir)
+            disable_https(self.name)
         else:
-            enable_https(self.name, projects_dir)
+            enable_https(self.name)
         GLib.timeout_add(500, self._refresh)
 
     def on_switch_toggled(self, switch, state):
         if self._updating:
             return False
-        projects_dir = settings.get("general", "projects_dir")
         if state:
             has_config = vhost_config_path(self.name).exists()
             if not has_config:
+                projects_dir = settings.get("general", "projects_dir")
                 ok = create_vhost(self.name, projects_dir)
             else:
-                ok = enable_vhost(self.name, projects_dir)
+                ok = enable_vhost(self.name)
         else:
-            ok = disable_vhost(self.name, projects_dir)
+            ok = disable_vhost(self.name)
         if not ok:
             self.on_status(False, f"Error al {'activar' if state else 'desactivar'} {self.name}.test")
         GLib.timeout_add(500, self._refresh)
         return False
 
     def on_delete_clicked(self, button):
-        projects_dir = settings.get("general", "projects_dir")
         dialog = Gtk.AlertDialog()
         dialog.set_message(f"¿Mover {self.name} a la papelera?")
         dialog.set_detail(
@@ -146,8 +144,7 @@ class VHostRow(Gtk.Box):
         except Exception:
             return
         if index == 1:
-            projects_dir = settings.get("general", "projects_dir")
-            ok = trash_vhost(self.name, projects_dir)
+            ok = trash_vhost(self.name)
             if ok:
                 self.on_deleted()
             else:
@@ -217,8 +214,7 @@ class VHostsPage(Gtk.Box):
         while child := self.list_box.get_first_child():
             self.list_box.remove(child)
 
-        projects_dir = settings.get("general", "projects_dir")
-        projects = list_projects(projects_dir)
+        projects = list_projects()
 
         if not projects:
             empty_label = Gtk.Label(label="No hay proyectos en el directorio configurado.")

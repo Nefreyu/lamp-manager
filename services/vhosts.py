@@ -120,11 +120,14 @@ CERTS_DIR = Path.home() / ".local/share/lamp-manager/certs"
 TRASH_DIR = Path.home() / ".local/share/lamp-manager/trash"
 
 
-def list_projects(projects_dir: str) -> list[str]:
-    base = Path(projects_dir)
-    if not base.exists():
+def list_projects() -> list[str]:
+    if not APACHE_SITES_AVAILABLE.exists():
         return []
-    return sorted(p.name for p in base.iterdir() if p.is_dir())
+    return sorted(
+        p.name.removesuffix(".test.conf")
+        for p in APACHE_SITES_AVAILABLE.iterdir()
+        if p.name.endswith(".test.conf")
+    )
 
 
 def vhost_config_path(name: str) -> Path:
@@ -188,7 +191,7 @@ def _ensure_localhost_ssl():
     _run_sudo(["a2ensite", "000-localhost-ssl"])
 
 
-def enable_https(name: str, projects_dir: str) -> bool:
+def enable_https(name: str) -> bool:
     CERTS_DIR.mkdir(parents=True, exist_ok=True)
     subprocess.run(["mkcert", "-install"], capture_output=True, text=True)
     result = subprocess.run(
@@ -202,16 +205,16 @@ def enable_https(name: str, projects_dir: str) -> bool:
         return False
     _run_sudo(["a2enmod", "ssl"])
     _ensure_localhost_ssl()
-    docroot = _detect_docroot(projects_dir, name)
+    docroot = get_docroot(name)
     if not _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, docroot, https=True)):
         return False
     return _run_sudo(["systemctl", "reload", "apache2"])
 
 
-def disable_https(name: str, projects_dir: str) -> bool:
+def disable_https(name: str) -> bool:
     (CERTS_DIR / f"{name}.test.pem").unlink(missing_ok=True)
     (CERTS_DIR / f"{name}.test-key.pem").unlink(missing_ok=True)
-    docroot = _detect_docroot(projects_dir, name)
+    docroot = get_docroot(name)
     if not _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, docroot, https=False)):
         return False
     return _run_sudo(["systemctl", "reload", "apache2"])
@@ -231,8 +234,8 @@ def remove_hosts_entry(domain: str) -> bool:
     return _sudo_write_file(str(HOSTS_FILE), "".join(lines))
 
 
-def generate_index_page(projects_dir: str) -> bool:
-    projects = [p for p in list_projects(projects_dir) if vhost_is_enabled(p)]
+def generate_index_page() -> bool:
+    projects = [name for name in list_projects() if vhost_is_enabled(name)]
 
     if not projects:
         if INDEX_BACKUP.exists():
@@ -356,7 +359,7 @@ def create_vhost(name: str, projects_dir: str) -> bool:
         return False
     _run_sudo(["systemctl", "reload", "apache2"])
     create_database(name)
-    generate_index_page(projects_dir)
+    generate_index_page()
     return True
 
 
@@ -386,41 +389,50 @@ def delete_vhost(name: str, projects_dir: str) -> bool:
     project_dir = Path(projects_dir) / name
     if project_dir.exists():
         _run_sudo(["rm", "-rf", str(project_dir)])
-    disable_https(name, projects_dir)
-    generate_index_page(projects_dir)
+    disable_https(name)
+    generate_index_page()
     return True
 
 
-def enable_vhost(name: str, projects_dir: str) -> bool:
+def enable_vhost(name: str) -> bool:
     if not add_hosts_entry(f"{name}.test"):
         return False
     if not _run_sudo(["a2ensite", f"{name}.test.conf"]):
         return False
     if not _run_sudo(["systemctl", "reload", "apache2"]):
         return False
-    generate_index_page(projects_dir)
+    generate_index_page()
     return True
 
 
-def disable_vhost(name: str, projects_dir: str) -> bool:
+def disable_vhost(name: str) -> bool:
     if not _run_sudo(["a2dissite", f"{name}.test.conf"]):
         return False
     remove_hosts_entry(f"{name}.test")
     if not _run_sudo(["systemctl", "reload", "apache2"]):
         return False
-    generate_index_page(projects_dir)
+    generate_index_page()
     return True
 
 
-def trash_vhost(name: str, projects_dir: str) -> bool:
+def _project_dir_from_docroot(docroot: str) -> Path | None:
+    if not docroot:
+        return None
+    p = Path(docroot)
+    return p.parent if p.name == "public" else p
+
+
+def trash_vhost(name: str) -> bool:
     trash_id = f"{name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     item_dir = TRASH_DIR / trash_id
     item_dir.mkdir(parents=True, exist_ok=True)
 
+    project_dir = _project_dir_from_docroot(get_docroot(name))
+
     meta = {
         "trash_id": trash_id,
         "name": name,
-        "projects_dir": projects_dir,
+        "project_dir": str(project_dir) if project_dir else None,
         "deleted_at": datetime.now().isoformat(),
         "has_db": False,
     }
@@ -451,12 +463,11 @@ def trash_vhost(name: str, projects_dir: str) -> bool:
                 (certs_bak / f.name).write_bytes(f.read_bytes())
                 f.unlink()
 
-    project_dir = Path(projects_dir) / name
-    if project_dir.exists():
+    if project_dir and project_dir.exists():
         _run_sudo(["mv", str(project_dir), str(item_dir / "files")])
 
     (item_dir / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False))
-    generate_index_page(projects_dir)
+    generate_index_page()
     return True
 
 
@@ -482,12 +493,15 @@ def restore_vhost(trash_id: str) -> bool:
 
     meta = json.loads(meta_path.read_text())
     name = meta["name"]
-    projects_dir = meta["projects_dir"]
+
+    if meta.get("project_dir"):
+        project_dir = Path(meta["project_dir"])
+    else:
+        project_dir = Path(meta["projects_dir"]) / name
 
     files_dir = item_dir / "files"
-    project_dir = Path(projects_dir) / name
     if files_dir.exists():
-        Path(projects_dir).mkdir(parents=True, exist_ok=True)
+        project_dir.parent.mkdir(parents=True, exist_ok=True)
         _run_sudo(["mv", str(files_dir), str(project_dir)])
 
     certs_bak = item_dir / "certs"
@@ -500,8 +514,7 @@ def restore_vhost(trash_id: str) -> bool:
     if conf_backup.exists():
         _sudo_write_file(str(vhost_config_path(name)), conf_backup.read_text())
     else:
-        docroot = _detect_docroot(projects_dir, name)
-        _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, docroot))
+        _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, str(project_dir)))
 
     add_hosts_entry(f"{name}.test")
     _run_sudo(["a2ensite", f"{name}.test.conf"])
@@ -518,7 +531,7 @@ def restore_vhost(trash_id: str) -> bool:
         _run_sudo_feed(["mysql"], db_dump.read_text())
 
     _run_sudo(["rm", "-rf", str(item_dir)])
-    generate_index_page(projects_dir)
+    generate_index_page()
     return True
 
 
