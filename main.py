@@ -24,24 +24,29 @@ if _icon_src.exists():
     _index = _hicolor / "index.theme"
     _content = _index.read_text() if _index.exists() else ""
     if "scalable/apps" not in _content:
-        _content = _content.rstrip()
         if "Directories=" in _content:
             _content = _content.replace(
                 next(l for l in _content.splitlines() if l.startswith("Directories=")),
                 next(l for l in _content.splitlines() if l.startswith("Directories=")) + ",scalable/apps"
             )
-        _content += "\n\n[scalable/apps]\nSize=48\nType=Scalable\nMinSize=1\nMaxSize=256\n"
+            _content = _content.rstrip() + "\n\n[scalable/apps]\nSize=48\nType=Scalable\nMinSize=1\nMaxSize=256\n"
+        else:
+            _content = (
+                "[Icon Theme]\nName=Hicolor\nComment=Hicolor icon theme\nDirectories=scalable/apps\n\n"
+                "[scalable/apps]\nSize=48\nType=Scalable\nMinSize=1\nMaxSize=256\n"
+            )
         _index.write_text(_content)
         subprocess.run(["gtk-update-icon-cache", "-f", str(_hicolor)], capture_output=True)
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
-from gi.repository import Gtk, GLib, Gdk
+gi.require_version("Adw", "1")
+from gi.repository import Gtk, GLib, Gdk, Adw
 
 from windows.main_window import MainWindow
 
 
-class App(Gtk.Application):
+class App(Adw.Application):
     def __init__(self):
         super().__init__(application_id="io.github.nefreyu.LampManager")
         self.connect("activate", self.on_activate)

@@ -284,9 +284,20 @@ class VHostsPage(Gtk.Box):
         progress_label.set_xalign(0)
         content.append(progress_label)
 
-        create_btn = dialog.add_button("Crear", Gtk.ResponseType.OK)
-        dialog.add_button("Cancelar", Gtk.ResponseType.CANCEL)
-        dialog.set_default_response(Gtk.ResponseType.OK)
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        btn_box.set_halign(Gtk.Align.END)
+        btn_box.set_margin_top(8)
+
+        cancel_btn = Gtk.Button(label="Cancelar")
+        cancel_btn.connect("clicked", lambda _: dialog.response(Gtk.ResponseType.CANCEL))
+        btn_box.append(cancel_btn)
+
+        create_btn = Gtk.Button(label="Crear")
+        create_btn.add_css_class("suggested-action")
+        create_btn.connect("clicked", lambda _: dialog.response(Gtk.ResponseType.OK))
+        btn_box.append(create_btn)
+
+        content.append(btn_box)
 
         def on_framework_changed(dropdown, _):
             fw = FRAMEWORKS[dropdown.get_selected()]
