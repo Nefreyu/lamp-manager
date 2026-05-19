@@ -14,6 +14,7 @@ from pages.vhost_config import VHostConfigPage
 from pages.vhost_trash import VHostTrashPage
 from windows.password_dialog import PasswordDialog
 from services.systemd import SERVICES, set_password, validate_password
+from services.keyring import get_sudo_password, save_sudo_password
 from pages.ajustes import AjustesPage
 
 NAV_ITEMS = [
@@ -205,12 +206,17 @@ class MainWindow(Adw.ApplicationWindow):
             GLib.idle_add(self.vhost_trash_page.refresh)
 
     def request_password(self):
+        stored = get_sudo_password()
+        if stored and validate_password(stored):
+            set_password(stored)
+            return
         self.dialog = PasswordDialog(self, self.on_password_success, self.on_password_cancel)
         self.dialog.present()
 
     def on_password_success(self, password):
         if validate_password(password):
             set_password(password)
+            save_sudo_password(password)
             self.dialog.close()
         else:
             self.dialog.show_error()
