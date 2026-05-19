@@ -540,3 +540,12 @@ def purge_trash_item(trash_id: str) -> bool:
     if item_dir.exists():
         _run_sudo(["rm", "-rf", str(item_dir)])
     return True
+
+
+def purge_all_trash() -> bool:
+    items = list_trash()
+    ok = True
+    for meta in items:
+        if not purge_trash_item(meta["trash_id"]):
+            ok = False
+    return ok

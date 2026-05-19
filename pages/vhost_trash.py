@@ -4,7 +4,7 @@ from gi.repository import Gtk, GLib
 
 import threading
 from datetime import datetime
-from services.vhosts import list_trash, restore_vhost, purge_trash_item
+from services.vhosts import list_trash, restore_vhost, purge_trash_item, purge_all_trash
 
 
 class VHostTrashPage(Gtk.Box):
@@ -23,10 +23,24 @@ class VHostTrashPage(Gtk.Box):
         back_btn.connect("clicked", lambda _: navigate_to("vhosts"))
         self.append(back_btn)
 
+        header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+
         title = Gtk.Label()
         title.set_markup("<span size='x-large' weight='bold'>Papelera</span>")
+        title.set_hexpand(True)
         title.set_xalign(0)
-        self.append(title)
+        header_box.append(title)
+
+        self.empty_btn = Gtk.Button()
+        self.empty_btn.add_css_class("destructive-action")
+        self.empty_btn.connect("clicked", self._on_empty_trash)
+        empty_btn_content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        empty_btn_content.append(Gtk.Image.new_from_icon_name("edit-clear-all-symbolic"))
+        empty_btn_content.append(Gtk.Label(label="Vaciar papelera"))
+        self.empty_btn.set_child(empty_btn_content)
+        header_box.append(self.empty_btn)
+
+        self.append(header_box)
         self.append(Gtk.Separator())
 
         self.status_label = Gtk.Label(label="")
@@ -41,6 +55,8 @@ class VHostTrashPage(Gtk.Box):
             self.list_box.remove(child)
 
         items = list_trash()
+        self.empty_btn.set_visible(bool(items))
+
         if not items:
             empty = Gtk.Label(label="La papelera está vacía.")
             empty.set_xalign(0)
@@ -49,6 +65,37 @@ class VHostTrashPage(Gtk.Box):
 
         for meta in items:
             self.list_box.append(self._make_row(meta))
+
+    def _on_empty_trash(self, button):
+        dialog = Gtk.AlertDialog()
+        dialog.set_message("¿Vaciar la papelera?")
+        dialog.set_detail(
+            "Todos los proyectos, archivos y bases de datos de la papelera "
+            "se borrarán para siempre. Esta acción no se puede deshacer."
+        )
+        dialog.set_buttons(["Cancelar", "Vaciar"])
+        dialog.set_default_button(0)
+        dialog.set_cancel_button(0)
+        dialog.choose(self.get_root(), None, self._on_empty_confirmed)
+
+    def _on_empty_confirmed(self, dialog, result):
+        try:
+            index = dialog.choose_finish(result)
+        except Exception:
+            return
+        if index == 1:
+            self.empty_btn.set_sensitive(False)
+            threading.Thread(target=self._run_empty_trash, daemon=True).start()
+
+    def _run_empty_trash(self):
+        ok = purge_all_trash()
+        GLib.idle_add(self._after_empty_trash, ok)
+
+    def _after_empty_trash(self, ok: bool):
+        self.empty_btn.set_sensitive(True)
+        if not ok:
+            self._set_status(False, "Error al vaciar la papelera.")
+        self.refresh()
 
     def _make_row(self, meta: dict) -> Gtk.Box:
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
