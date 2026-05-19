@@ -229,7 +229,9 @@ class MainWindow(Adw.ApplicationWindow):
         from config.version import __version__
         dialog = Adw.AboutDialog()
         dialog.set_application_name("LAMP Manager")
+        dialog.set_developer_name("Juan Diez")
         dialog.set_version(__version__)
+        dialog.set_comments("Una herramienta para gestionar tu entorno de desarrollo LAMP en Linux.")
         dialog.set_developers(["Juan Diez"])
         dialog.set_application_icon("io.github.nefreyu.LampManager")
         dialog.set_license_type(Gtk.License.GPL_3_0)
