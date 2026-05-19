@@ -1,3 +1,14 @@
+lamp-manager (0.1.1) resolute; urgency=medium
+
+  * Guardar contraseña sudo en GNOME Keyring para no pedirla en cada arranque.
+  * Visor de logs para MySQL con pestañas de log de errores y consultas lentas.
+  * Botón de reinicio para el servicio MySQL en la página principal.
+  * Scroll automático al fondo al abrir el visor de logs.
+  * Efecto hover en filas de servicios y virtual hosts con padding mejorado.
+  * Mostrar nombre del autor en el diálogo Acerca de.
+
+ -- Juan Díez <nefreyu.99@gmail.com>  Mon, 19 May 2026 00:00:00 +0200
+
 lamp-manager (0.1.0-1) noble; urgency=medium
 
   * Fix dependency: replace gir1.2-adwaita-1 with gir1.2-adw-1.
