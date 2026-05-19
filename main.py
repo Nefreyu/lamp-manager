@@ -38,13 +38,34 @@ if _icon_src.exists():
         _index.write_text(_content)
         subprocess.run(["gtk-update-icon-cache", "-f", str(_hicolor)], capture_output=True)
 
+# Instalar .desktop en ~/.local/share/applications/ si se ejecuta desde el directorio de desarrollo
+_desktop_src = Path(__file__).parent / "packaging/io.github.nefreyu.LampManager.desktop"
+if _desktop_src.exists():
+    import subprocess
+    _apps_dir = Path.home() / ".local/share/applications"
+    _apps_dir.mkdir(parents=True, exist_ok=True)
+    _desktop_dst = _apps_dir / "io.github.nefreyu.LampManager.desktop"
+    _desktop_content = _desktop_src.read_text()
+    _exec_line = f"Exec=python3 {Path(__file__).resolve()}"
+    _desktop_content = "\n".join(
+        _exec_line if line.startswith("Exec=") else line
+        for line in _desktop_content.splitlines()
+    ) + "\n"
+    if not _desktop_dst.exists() or _desktop_dst.read_text() != _desktop_content:
+        _desktop_dst.write_text(_desktop_content)
+        subprocess.run(["update-desktop-database", str(_apps_dir)], capture_output=True)
+
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Gtk, GLib, Gdk, Adw
 
+GLib.set_prgname("io.github.nefreyu.LampManager")
+GLib.set_application_name("LAMP Manager")
+
 from windows.main_window import MainWindow
 from windows.splash_window import SplashWindow
+from services.tray import SystemTray
 
 
 class App(Adw.Application):
@@ -60,17 +81,18 @@ class App(Adw.Application):
 
     def _build_main(self):
         self._window = MainWindow(self)
-        self._window.set_startup_id(self.get_application_id())
         elapsed_ms = (GLib.get_monotonic_time() - self._splash_start) // 1000
         remaining = max(0, 1200 - elapsed_ms)
         GLib.timeout_add(remaining, self._show_main)
         return False
 
     def _show_main(self):
-        self._splash.close()
         self._window.present()
+        GLib.idle_add(self._splash.close)
         if not (DEV_MODE and SKIP_PASSWORD_DIALOG):
             GLib.idle_add(self._window.request_password)
+        self._tray = SystemTray(self._window.toggle_visibility, self.quit)
+        self._tray.start()
         return False
             
 

@@ -35,6 +35,10 @@ class MainWindow(Adw.ApplicationWindow):
         about_action.connect("activate", self.on_about)
         self.add_action(about_action)
 
+        quit_action = Gio.SimpleAction.new("quit", None)
+        quit_action.connect("activate", lambda *_: self.get_application().quit())
+        self.add_action(quit_action)
+
         main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self.set_content(main_box)
 
@@ -53,6 +57,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         menu = Gio.Menu()
         menu.append("Acerca de LAMP Manager", "win.about")
+        menu.append("Salir", "win.quit")
         menu_btn = Gtk.MenuButton()
         menu_btn.set_icon_name("open-menu-symbolic")
         menu_btn.set_menu_model(menu)
@@ -141,6 +146,7 @@ class MainWindow(Adw.ApplicationWindow):
             self.stack.add_named(page_class(service, self.navigate_to), f"service-{service['id']}")
 
         self.nav_list.select_row(self._nav_rows["servicios"])
+        self.connect("close-request", self._on_close_request)
 
     def _make_nav_row(self, label: str, section: str, icon: str) -> Gtk.ListBoxRow:
         row = Gtk.ListBoxRow()
@@ -204,6 +210,16 @@ class MainWindow(Adw.ApplicationWindow):
             GLib.idle_add(self.vhosts_page.refresh)
         elif name == "vhost-trash":
             GLib.idle_add(self.vhost_trash_page.refresh)
+
+    def _on_close_request(self, _):
+        self.set_visible(False)
+        return True
+
+    def toggle_visibility(self):
+        if self.is_visible():
+            self.set_visible(False)
+        else:
+            self.present()
 
     def request_password(self):
         stored = get_sudo_password()
