@@ -512,6 +512,12 @@ def trash_vhost(name: str) -> bool:
     if project_dir and project_dir.exists():
         _run_sudo(["mv", str(project_dir), str(item_dir / "files")])
 
+    logs_bak = item_dir / "logs"
+    for log_path in (VHOST_ERROR_LOG.format(name=name), VHOST_ACCESS_LOG.format(name=name)):
+        if Path(log_path).exists():
+            logs_bak.mkdir(exist_ok=True)
+            _run_sudo(["mv", log_path, str(logs_bak / Path(log_path).name)])
+
     (item_dir / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False))
     generate_index_page()
     return True
