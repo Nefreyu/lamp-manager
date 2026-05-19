@@ -44,6 +44,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Gtk, GLib, Gdk, Adw
 
 from windows.main_window import MainWindow
+from windows.splash_window import SplashWindow
 
 
 class App(Adw.Application):
@@ -52,11 +53,25 @@ class App(Adw.Application):
         self.connect("activate", self.on_activate)
 
     def on_activate(self, app):
-        window = MainWindow(app)
-        window.set_startup_id(app.get_application_id())
-        window.present()
+        self._splash = SplashWindow(app)
+        self._splash.present()
+        self._splash_start = GLib.get_monotonic_time()
+        GLib.idle_add(self._build_main)
+
+    def _build_main(self):
+        self._window = MainWindow(self)
+        self._window.set_startup_id(self.get_application_id())
+        elapsed_ms = (GLib.get_monotonic_time() - self._splash_start) // 1000
+        remaining = max(0, 1200 - elapsed_ms)
+        GLib.timeout_add(remaining, self._show_main)
+        return False
+
+    def _show_main(self):
+        self._splash.close()
+        self._window.present()
         if not (DEV_MODE and SKIP_PASSWORD_DIALOG):
-            GLib.idle_add(window.request_password)
+            GLib.idle_add(self._window.request_password)
+        return False
             
 
 if __name__ == "__main__":
