@@ -65,11 +65,9 @@ class PhpConfigPage(Gtk.Box):
 
         php_ini = f"/etc/php/{self.php_ver}/fpm/php.ini"
         pool_conf = f"/etc/php/{self.php_ver}/fpm/pool.d/www.conf"
-        error_log = f"/var/log/php{self.php_ver}-fpm.log"
 
         self.append(self._file_row("php.ini (FPM)", php_ini, "document-edit-symbolic"))
         self.append(self._file_row("Configuración de pools", pool_conf, "document-edit-symbolic"))
-        self.append(self._file_row("Log de errores", error_log, "dialog-warning-symbolic"))
 
         self.append(Gtk.Separator())
 

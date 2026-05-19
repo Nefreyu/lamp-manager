@@ -17,6 +17,7 @@ from services.vhosts import (
 class VHostRow(Gtk.Box):
     def __init__(self, name: str, on_deleted, on_status, on_configure):
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        self.add_css_class("item-row")
         self.name = name
         self.on_deleted = on_deleted
         self.on_status = on_status

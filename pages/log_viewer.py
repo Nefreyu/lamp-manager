@@ -3,7 +3,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, GLib
 
-from services.systemd import read_log_tail
+from services.systemd import read_log_tail, clear_log
 
 _TAG_COLORS = {
     "error":  "#e01b24",
@@ -45,6 +45,13 @@ class LogViewer(Gtk.Box):
         path_label.set_xalign(0)
         path_label.set_hexpand(True)
         header.append(path_label)
+
+        clear_btn = Gtk.Button()
+        clear_btn.set_icon_name("edit-clear-all-symbolic")
+        clear_btn.set_tooltip_text("Vaciar log")
+        clear_btn.set_valign(Gtk.Align.CENTER)
+        clear_btn.connect("clicked", self._on_clear_clicked)
+        header.append(clear_btn)
 
         refresh_btn = Gtk.Button()
         refresh_btn.set_icon_name("view-refresh-symbolic")
@@ -150,3 +157,25 @@ class LogViewer(Gtk.Box):
         else:
             self._stop_auto_refresh()
         return False
+
+    def _on_clear_clicked(self, button):
+        dialog = Gtk.AlertDialog()
+        dialog.set_message("¿Vaciar el log?")
+        dialog.set_detail(
+            "El archivo de log se truncará. Apache seguirá escribiendo "
+            "en el mismo archivo sin necesidad de reiniciarlo."
+        )
+        dialog.set_buttons(["Cancelar", "Vaciar"])
+        dialog.set_default_button(0)
+        dialog.set_cancel_button(0)
+        dialog.choose(self.get_root(), None, self._on_clear_confirmed)
+
+    def _on_clear_confirmed(self, dialog, result):
+        try:
+            index = dialog.choose_finish(result)
+        except Exception:
+            return
+        if index == 1:
+            clear_log(self._path)
+            self._last_content = None
+            self._load()

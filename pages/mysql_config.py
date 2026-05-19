@@ -4,6 +4,7 @@ from gi.repository import Gtk, Gio
 from pathlib import Path
 
 from services.mysql import get_conf_path, MYSQL_ERROR_LOG, MYSQL_SLOW_LOG
+from pages.log_viewer import LogViewer
 
 
 class MysqlConfigPage(Gtk.Box):
@@ -28,8 +29,19 @@ class MysqlConfigPage(Gtk.Box):
         self.append(Gtk.Separator())
 
         self.append(self._file_row("Configuración principal", get_conf_path(), "document-edit-symbolic"))
-        self.append(self._file_row("Log de errores", MYSQL_ERROR_LOG, "dialog-warning-symbolic"))
-        self.append(self._file_row("Log de consultas lentas", MYSQL_SLOW_LOG, "document-open-symbolic"))
+        self.append(Gtk.Separator())
+
+        notebook = Gtk.Notebook()
+        notebook.set_vexpand(True)
+        self.append(notebook)
+
+        error_log = LogViewer(MYSQL_ERROR_LOG)
+        error_log.set_margin_top(12)
+        notebook.append_page(error_log, Gtk.Label(label="Log de errores"))
+
+        slow_log = LogViewer(MYSQL_SLOW_LOG)
+        slow_log.set_margin_top(12)
+        notebook.append_page(slow_log, Gtk.Label(label="Log de consultas lentas"))
 
     def _file_row(self, label: str, path: str, icon: str) -> Gtk.Box:
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)

@@ -1,10 +1,11 @@
 import gi
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk, Gio, GLib
+gi.require_version("Gdk", "4.0")
+from gi.repository import Gtk, Gio, GLib, Gdk
 from pathlib import Path
 from services.systemd import (
     SERVICES, get_status, is_installed,
-    start_service, stop_service, reload_service,
+    start_service, stop_service, reload_service, restart_service,
     install_mailpit_service, uninstall_mailpit_service,
     get_service_ports,
 )
@@ -105,6 +106,7 @@ class RecommendationsPanel(Gtk.Box):
 class ServiceRow(Gtk.Box):
     def __init__(self, service: dict, navigate_to, on_changed=None):
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        self.add_css_class("item-row")
         self.service = service
         self.service_id = service["id"]
         self.optional = service.get("optional", False)
@@ -159,6 +161,15 @@ class ServiceRow(Gtk.Box):
             self.reload_button.connect("clicked", self.on_reload_clicked)
             self.append(self.reload_button)
 
+        # Botón reiniciar (solo servicios con restartable=True)
+        if service.get("restartable"):
+            self.restart_button = Gtk.Button()
+            self.restart_button.set_icon_name("system-reboot-symbolic")
+            self.restart_button.set_tooltip_text("Reiniciar servicio")
+            self.restart_button.set_valign(Gtk.Align.CENTER)
+            self.restart_button.connect("clicked", self.on_restart_clicked)
+            self.append(self.restart_button)
+
         # Switch arrancar/parar (no aplica a servicios web_only)
         if not self.web_only:
             self.switch = Gtk.Switch()
@@ -178,6 +189,17 @@ class ServiceRow(Gtk.Box):
 
     def _do_reload(self):
         reload_service(self.service_id)
+        self.set_sensitive(True)
+        self.refresh()
+        return False
+
+    def on_restart_clicked(self, button):
+        self.status_label.set_markup("<span color='gray'>Reiniciando...</span>")
+        self.set_sensitive(False)
+        GLib.timeout_add(50, self._do_restart)
+
+    def _do_restart(self):
+        restart_service(self.service_id)
         self.set_sensitive(True)
         self.refresh()
         return False
@@ -203,6 +225,8 @@ class ServiceRow(Gtk.Box):
                 self.install_button.set_label("Instalar servicio")
             if self.service.get("reloadable"):
                 self.reload_button.set_sensitive(False)
+            if self.service.get("restartable"):
+                self.restart_button.set_sensitive(False)
         else:
             self.status_label.set_markup("")
             if self.web_only:
@@ -220,6 +244,8 @@ class ServiceRow(Gtk.Box):
                     self.link_button.set_sensitive(active)
                 if self.service.get("reloadable"):
                     self.reload_button.set_sensitive(active)
+                if self.service.get("restartable"):
+                    self.restart_button.set_sensitive(active)
             if self.optional:
                 self.install_button.set_label("Desinstalar servicio")
 
@@ -268,6 +294,10 @@ class ServiciosPage(Gtk.Box):
         self.set_margin_bottom(24)
         self.set_margin_start(24)
         self.set_margin_end(24)
+
+        css = Gtk.CssProvider()
+        css.load_from_data(b".item-row { border-radius:6px; padding-top:6px; padding-bottom:6px; padding-right:8px; } .item-row:hover { background-color: alpha(@window_fg_color, 0.08); } .item-row button.flat:hover { background-color: transparent; }")
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
         title = Gtk.Label()
         title.set_markup("<span size='x-large' weight='bold'>Servicios</span>")

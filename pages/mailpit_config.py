@@ -27,6 +27,7 @@ def _setting_row(label_text: str, subtitle: str, widget: Gtk.Widget) -> Gtk.Box:
         sub.set_xalign(0)
         label_box.append(sub)
     row.append(label_box)
+    widget.set_valign(Gtk.Align.CENTER)
     row.append(widget)
     return row
 

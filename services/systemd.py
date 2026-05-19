@@ -27,7 +27,7 @@ _PHP_ENTRY = _detect_php_entry()
 
 SERVICES = [
     {"id": "apache2",    "label": "Apache",    "optional": False, "binary": "/usr/sbin/apache2",             "url": "http://localhost", "reloadable": True, "process": "apache2"},
-    {"id": "mysql",      "label": "MySQL",     "optional": False, "binary": "/usr/sbin/mysqld",                                                               "process": "mysqld"},
+    {"id": "mysql",      "label": "MySQL",     "optional": False, "binary": "/usr/sbin/mysqld",                                                               "restartable": True, "process": "mysqld"},
     _PHP_ENTRY,
     {"id": "phpmyadmin", "label": "phpMyAdmin","optional": False, "binary": "/usr/share/phpmyadmin/index.php","url": "http://localhost/phpmyadmin", "web_only": True},
     {"id": "mailpit",    "label": "Mailpit",   "optional": True,  "binary": "/usr/local/bin/mailpit",         "url": "http://localhost:8025",                 "process": "mailpit"},
@@ -160,6 +160,10 @@ def reload_service(service_id: str) -> bool:
     return _run_sudo(["systemctl", "reload", service_id])
 
 
+def restart_service(service_id: str) -> bool:
+    return _run_sudo(["systemctl", "restart", service_id])
+
+
 def start_service(service_id: str) -> bool:
     return _run_sudo(["systemctl", "start", service_id])
 
@@ -206,6 +210,10 @@ def get_service_ports(process: str) -> list[int]:
             if port_str.isdigit():
                 ports.add(int(port_str))
     return sorted(ports)
+
+
+def clear_log(path: str) -> bool:
+    return _run_sudo(["truncate", "-s", "0", path])
 
 
 def read_log_tail(path: str, lines: int = 200) -> str | None:

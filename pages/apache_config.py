@@ -5,7 +5,8 @@ from pathlib import Path
 
 from services.apache import (
     list_available_modules, list_enabled_modules,
-    enable_module, disable_module
+    enable_module, disable_module,
+    has_server_name, add_server_name,
 )
 from pages.log_viewer import LogViewer
 
@@ -64,6 +65,10 @@ class ApacheConfigPage(Gtk.Box):
         self.append(Gtk.Separator())
 
         self.append(self._file_row("Configuración principal", APACHE_CONF, "document-edit-symbolic"))
+
+        if not has_server_name():
+            self._server_name_banner = self._make_server_name_banner()
+            self.append(self._server_name_banner)
 
         self.append(Gtk.Separator())
 
@@ -163,3 +168,40 @@ class ApacheConfigPage(Gtk.Box):
 
     def _on_search_changed(self, _):
         self.listbox.invalidate_filter()
+
+    def _make_server_name_banner(self) -> Gtk.Box:
+        banner = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        banner.add_css_class("warning")
+        banner.set_margin_top(4)
+        banner.set_margin_bottom(4)
+
+        icon = Gtk.Image.new_from_icon_name("dialog-warning-symbolic")
+        banner.append(icon)
+
+        msg = Gtk.Label()
+        msg.set_markup(
+            "<b>ServerName no definido</b> — Apache no puede determinar el nombre "
+            "del servidor y muestra un aviso en cada reinicio."
+        )
+        msg.set_xalign(0)
+        msg.set_hexpand(True)
+        msg.set_wrap(True)
+        banner.append(msg)
+
+        fix_btn = Gtk.Button(label="Añadir ServerName localhost")
+        fix_btn.add_css_class("suggested-action")
+        fix_btn.set_valign(Gtk.Align.CENTER)
+        fix_btn.connect("clicked", self._on_fix_server_name)
+        banner.append(fix_btn)
+
+        return banner
+
+    def _on_fix_server_name(self, button):
+        button.set_sensitive(False)
+        button.set_label("Aplicando…")
+        ok = add_server_name()
+        if ok:
+            self._server_name_banner.set_visible(False)
+        else:
+            button.set_sensitive(True)
+            button.set_label("Añadir ServerName localhost")

@@ -16,65 +16,109 @@ from windows.password_dialog import PasswordDialog
 from services.systemd import SERVICES, set_password, validate_password
 from pages.ajustes import AjustesPage
 
+NAV_ITEMS = [
+    ("Servicios",     "servicios", "computer-symbolic"),
+    ("Virtual Hosts", "vhosts",    "network-server-symbolic"),
+]
+SETTINGS_ITEMS = [
+    ("Ajustes", "ajustes", "preferences-system-symbolic"),
+]
 
-class MainWindow(Gtk.ApplicationWindow):
+
+class MainWindow(Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app)
         self.set_default_size(960, 600)
 
-        header = Gtk.HeaderBar()
-        self.set_titlebar(header)
-        title = Gtk.Label(label="LAMP Manager")
-        header.set_title_widget(title)
-
         about_action = Gio.SimpleAction.new("about", None)
         about_action.connect("activate", self.on_about)
         self.add_action(about_action)
+
+        main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self.set_content(main_box)
+
+        # ── SIDEBAR ──────────────────────────────────────────────────
+        sidebar_view = Adw.ToolbarView()
+        sidebar_view.set_size_request(200, -1)
+
+        sidebar_header = Adw.HeaderBar()
+        sidebar_header.set_show_end_title_buttons(False)
+        sidebar_header.set_title_widget(Gtk.Box())
+
+        self.search_toggle = Gtk.ToggleButton()
+        self.search_toggle.set_icon_name("system-search-symbolic")
+        self.search_toggle.set_tooltip_text("Buscar")
+        sidebar_header.pack_start(self.search_toggle)
 
         menu = Gio.Menu()
         menu.append("Acerca de LAMP Manager", "win.about")
         menu_btn = Gtk.MenuButton()
         menu_btn.set_icon_name("open-menu-symbolic")
         menu_btn.set_menu_model(menu)
-        header.pack_start(menu_btn)
+        sidebar_header.pack_end(menu_btn)
+        sidebar_view.add_top_bar(sidebar_header)
 
-        main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        self.set_child(main_box)
+        search_bar = Gtk.SearchBar()
+        self.search_entry = Gtk.SearchEntry()
+        self.search_entry.set_hexpand(True)
+        self.search_entry.set_placeholder_text("Buscar…")
+        search_bar.set_child(self.search_entry)
+        self.search_toggle.connect(
+            "toggled", lambda btn: search_bar.set_search_mode(btn.get_active())
+        )
+        self.search_entry.connect("search-changed", self._on_search_changed)
+        sidebar_view.add_top_bar(search_bar)
 
-        sidebar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        sidebar.set_margin_top(12)
-        sidebar.set_margin_bottom(12)
-        sidebar.set_margin_start(12)
-        sidebar.set_margin_end(12)
-        sidebar.set_size_request(150, -1)
-        main_box.append(sidebar)
+        self._nav_rows = {}
 
-        btn_servicios = Gtk.Button(label="Servicios")
-        btn_servicios.connect("clicked", self.on_section_changed, "servicios")
-        sidebar.append(btn_servicios)
+        self.nav_list = Gtk.ListBox()
+        self.nav_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self.nav_list.add_css_class("navigation-sidebar")
+        self.nav_list.set_vexpand(True)
+        self.nav_list.set_filter_func(self._filter_row)
+        self.nav_list.connect("row-selected", self._on_nav_selected)
 
-        btn_vhosts = Gtk.Button(label="Virtual Hosts")
-        btn_vhosts.connect("clicked", self.on_section_changed, "vhosts")
-        sidebar.append(btn_vhosts)
+        for label, section, icon in NAV_ITEMS:
+            row = self._make_nav_row(label, section, icon)
+            self.nav_list.append(row)
+            self._nav_rows[section] = row
 
-        spacer = Gtk.Box()
-        spacer.set_vexpand(True)
-        sidebar.append(spacer)
+        self.settings_list = Gtk.ListBox()
+        self.settings_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self.settings_list.add_css_class("navigation-sidebar")
+        self.settings_list.set_filter_func(self._filter_row)
+        self.settings_list.connect("row-selected", self._on_nav_selected)
 
-        sidebar.append(Gtk.Separator())
+        for label, section, icon in SETTINGS_ITEMS:
+            row = self._make_nav_row(label, section, icon)
+            self.settings_list.append(row)
+            self._nav_rows[section] = row
 
-        btn_ajustes = Gtk.Button(label="Ajustes")
-        btn_ajustes.connect("clicked", self.on_section_changed, "ajustes")
-        sidebar.append(btn_ajustes)
+        sidebar_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        sidebar_content.append(self.nav_list)
+        sidebar_content.append(Gtk.Separator())
+        sidebar_content.append(self.settings_list)
+        sidebar_view.set_content(sidebar_content)
 
-        separator = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
-        main_box.append(separator)
+        main_box.append(sidebar_view)
+        main_box.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
+
+        # ── CONTENT ──────────────────────────────────────────────────
+        content_view = Adw.ToolbarView()
+        content_view.set_hexpand(True)
+
+        content_header = Adw.HeaderBar()
+        content_header.set_show_start_title_buttons(False)
+        content_header.set_title_widget(Gtk.Label(label="LAMP Manager"))
+        content_view.add_top_bar(content_header)
 
         self.stack = Gtk.Stack()
         self.stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
         self.stack.set_hexpand(True)
-        main_box.append(self.stack)
+        content_view.set_content(self.stack)
+        main_box.append(content_view)
 
+        # ── PAGES ────────────────────────────────────────────────────
         self.servicios_page = ServiciosPage(self.navigate_to)
         self.stack.add_named(self.servicios_page, "servicios")
         self.vhosts_page = VHostsPage(self.navigate_to_vhost_config, self.navigate_to)
@@ -86,18 +130,57 @@ class MainWindow(Gtk.ApplicationWindow):
         self.stack.add_named(self.vhost_config_page, "vhost-config")
 
         config_pages = {
-            "mailpit": MailpitConfigPage,
-            "apache2": ApacheConfigPage,
-            "mysql": MysqlConfigPage,
+            "mailpit":    MailpitConfigPage,
+            "apache2":    ApacheConfigPage,
+            "mysql":      MysqlConfigPage,
             "phpmyadmin": PhpMyAdminConfigPage,
         }
         for service in SERVICES:
-            if service["id"].endswith("-fpm"):
-                page_class = PhpConfigPage
-            else:
-                page_class = config_pages.get(service["id"], ServiceConfigPage)
-            page = page_class(service, self.navigate_to)
-            self.stack.add_named(page, f"service-{service['id']}")
+            page_class = PhpConfigPage if service["id"].endswith("-fpm") else config_pages.get(service["id"], ServiceConfigPage)
+            self.stack.add_named(page_class(service, self.navigate_to), f"service-{service['id']}")
+
+        self.nav_list.select_row(self._nav_rows["servicios"])
+
+    def _make_nav_row(self, label: str, section: str, icon: str) -> Gtk.ListBoxRow:
+        row = Gtk.ListBoxRow()
+        row._section = section
+        row._label_text = label.lower()
+
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        box.set_margin_top(10)
+        box.set_margin_bottom(10)
+        box.set_margin_start(12)
+        box.set_margin_end(12)
+        box.append(Gtk.Image.new_from_icon_name(icon))
+        lbl = Gtk.Label(label=label)
+        lbl.set_xalign(0)
+        box.append(lbl)
+        row.set_child(box)
+        return row
+
+    def _filter_row(self, row) -> bool:
+        query = self.search_entry.get_text().lower().strip()
+        return not query or query in row._label_text
+
+    def _on_search_changed(self, entry):
+        self.nav_list.invalidate_filter()
+        self.settings_list.invalidate_filter()
+
+    def _on_nav_selected(self, listbox, row):
+        if row is None:
+            return
+        self.navigate_to(row._section)
+
+    def _select_nav_row(self, section):
+        row = self._nav_rows.get(section)
+        if not row:
+            return
+        if section == "ajustes":
+            self.nav_list.select_row(None)
+            self.settings_list.select_row(row)
+        else:
+            self.settings_list.select_row(None)
+            self.nav_list.select_row(row)
 
     def navigate_to_vhost_config(self, name: str):
         self.vhost_config_page.load(name)
@@ -112,6 +195,8 @@ class MainWindow(Gtk.ApplicationWindow):
         else:
             self.stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
         self.stack.set_visible_child_name(name)
+        if name in self._nav_rows:
+            self._select_nav_row(name)
         if name == "servicios":
             GLib.idle_add(self.servicios_page.on_refresh, None)
         elif name == "vhosts":
@@ -133,9 +218,6 @@ class MainWindow(Gtk.ApplicationWindow):
     def on_password_cancel(self):
         self.dialog.close()
         self.close()
-
-    def on_section_changed(self, button, section):
-        self.navigate_to(section)
 
     def on_about(self, action, param):
         from config.version import __version__
