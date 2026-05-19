@@ -120,7 +120,7 @@ class DatabaseRow(Gtk.ListBoxRow):
 
 
 class UserRow(Gtk.ListBoxRow):
-    def __init__(self, username: str, host: str, on_delete):
+    def __init__(self, username: str, host: str, databases: list[str], on_delete):
         super().__init__()
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         box.set_margin_top(8)
@@ -128,10 +128,20 @@ class UserRow(Gtk.ListBoxRow):
         box.set_margin_start(12)
         box.set_margin_end(8)
 
+        text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        text_box.set_hexpand(True)
+
         label = Gtk.Label(label=f"{username}@{host}")
-        label.set_hexpand(True)
         label.set_xalign(0)
-        box.append(label)
+        text_box.append(label)
+
+        db_text = ", ".join(databases) if databases else "Sin acceso a bases de datos"
+        db_label = Gtk.Label()
+        db_label.set_markup(f"<span size='small' color='gray'>{db_text}</span>")
+        db_label.set_xalign(0)
+        text_box.append(db_label)
+
+        box.append(text_box)
 
         del_btn = Gtk.Button()
         del_btn.set_icon_name("edit-delete-symbolic")
@@ -268,8 +278,8 @@ class MysqlConfigPage(Gtk.Box):
     def _load_users(self):
         while child := self._user_listbox.get_first_child():
             self._user_listbox.remove(child)
-        for username, host in list_users():
-            self._user_listbox.append(UserRow(username, host, self._on_delete_user))
+        for username, host, databases in list_users():
+            self._user_listbox.append(UserRow(username, host, databases, self._on_delete_user))
 
     def _on_create_db(self):
         name = self._db_entry.get_text().strip()

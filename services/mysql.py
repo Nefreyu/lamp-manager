@@ -69,19 +69,23 @@ def drop_database(name: str) -> bool:
     return _exec(f"DROP DATABASE `{safe}`;")
 
 
-def list_users() -> list[tuple[str, str]]:
+def list_users() -> list[tuple[str, str, list[str]]]:
     hidden = ", ".join(f"'{u}'" for u in _HIDDEN_USERS)
     out = _query(
-        f"SELECT user, host FROM mysql.user "
-        f"WHERE user NOT IN ({hidden}) ORDER BY user, host;"
+        f"SELECT u.user, u.host, IFNULL(GROUP_CONCAT(d.db ORDER BY d.db SEPARATOR ','), '') "
+        f"FROM mysql.user u "
+        f"LEFT JOIN mysql.db d ON u.user = d.user AND u.host = d.host "
+        f"WHERE u.user NOT IN ({hidden}) "
+        f"GROUP BY u.user, u.host ORDER BY u.user, u.host;"
     )
     if out is None:
         return []
     result = []
     for line in out.splitlines():
         parts = line.split("\t")
-        if len(parts) == 2 and parts[0]:
-            result.append((parts[0], parts[1]))
+        if len(parts) == 3 and parts[0]:
+            dbs = [db for db in parts[2].split(",") if db]
+            result.append((parts[0], parts[1], dbs))
     return result
 
 
