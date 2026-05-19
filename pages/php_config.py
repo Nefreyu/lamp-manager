@@ -79,6 +79,8 @@ class PhpConfigPage(Gtk.Box):
         ini_page = self._build_ini_section()
         ini_page.set_margin_top(12)
         ini_page.set_margin_bottom(12)
+        ini_page.set_margin_start(12)
+        ini_page.set_margin_end(12)
         notebook.append_page(ini_page, Gtk.Label(label="php.ini"))
 
         # Pestaña Extensiones
@@ -124,6 +126,8 @@ class PhpConfigPage(Gtk.Box):
             current = get_ini_value(self.php_ver, key) or ""
 
             row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            row.set_margin_top(4)
+            row.set_margin_bottom(4)
 
             label_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
             label_box.set_hexpand(True)
