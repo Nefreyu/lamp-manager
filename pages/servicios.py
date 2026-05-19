@@ -188,6 +188,13 @@ class ServiceRow(Gtk.Box):
         GLib.timeout_add(50, self._do_reload)
 
     def _do_reload(self):
+        if self.service_id == "apache2":
+            from services.apache import configtest
+            ok, msg = configtest()
+            if not ok:
+                self.status_label.set_markup(f"<span color='red' size='small'>Error de configuración: {GLib.markup_escape_text(msg)}</span>")
+                self.set_sensitive(True)
+                return False
         reload_service(self.service_id)
         self.set_sensitive(True)
         self.refresh()

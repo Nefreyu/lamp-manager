@@ -6,7 +6,7 @@ from pathlib import Path
 from services.apache import (
     list_available_modules, list_enabled_modules,
     enable_module, disable_module,
-    has_server_name, add_server_name,
+    has_server_name, add_server_name, configtest,
 )
 from pages.log_viewer import LogViewer
 
@@ -95,6 +95,11 @@ class ApacheConfigPage(Gtk.Box):
         scrolled.set_child(self.listbox)
         modules_box.append(scrolled)
 
+        self._module_status = Gtk.Label(label="")
+        self._module_status.set_xalign(0)
+        self._module_status.set_wrap(True)
+        modules_box.append(self._module_status)
+
         notebook.append_page(modules_box, Gtk.Label(label="Módulos"))
 
         # Pestaña Log de errores
@@ -153,12 +158,25 @@ class ApacheConfigPage(Gtk.Box):
             self.listbox.append(row)
 
     def _on_module_toggled(self, name: str, state: bool) -> bool:
-        if state:
-            enable_module(name)
-        else:
-            disable_module(name)
-        GLib.timeout_add(500, self._load_modules)
+        self._module_status.set_markup("<span color='gray'>Aplicando…</span>")
+        self.listbox.set_sensitive(False)
+
+        def run():
+            ok, msg = enable_module(name) if state else disable_module(name)
+            GLib.idle_add(self._after_module_toggled, ok, msg)
+
+        import threading
+        threading.Thread(target=run, daemon=True).start()
         return False
+
+    def _after_module_toggled(self, ok: bool, msg: str):
+        self.listbox.set_sensitive(True)
+        if ok:
+            self._module_status.set_markup("<span color='green'>Módulo actualizado y Apache recargado.</span>")
+            GLib.timeout_add_seconds(5, lambda: self._module_status.set_markup("") or False)
+        else:
+            self._module_status.set_markup(f"<span color='red'>{GLib.markup_escape_text(msg)}</span>")
+        self._load_modules()
 
     def _filter_func(self, row) -> bool:
         text = self.search_entry.get_text().lower()

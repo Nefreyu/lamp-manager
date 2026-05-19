@@ -2,6 +2,7 @@ import re
 import shlex
 import subprocess
 from pathlib import Path
+import services.systemd as _systemd
 from services.systemd import _run_sudo
 
 MODS_AVAILABLE = Path("/etc/apache2/mods-available")
@@ -45,6 +46,18 @@ def add_server_name() -> bool:
     return ok
 
 
+def configtest() -> tuple[bool, str]:
+    if _systemd._sudo_password is None:
+        return False, "No hay contraseña configurada"
+    result = subprocess.run(
+        ["sudo", "-S", "-p", "", "apache2ctl", "configtest"],
+        input=_systemd._sudo_password + "\n",
+        capture_output=True, text=True,
+    )
+    output = (result.stderr or result.stdout).strip()
+    return result.returncode == 0, output
+
+
 def list_available_modules() -> list[str]:
     if not MODS_AVAILABLE.exists():
         return []
@@ -57,13 +70,23 @@ def list_enabled_modules() -> set[str]:
     return {p.stem for p in MODS_ENABLED.glob("*.load")}
 
 
-def enable_module(name: str) -> bool:
+def enable_module(name: str) -> tuple[bool, str]:
     if not _run_apache_cmd(["a2enmod", name]):
-        return False
-    return _run_sudo(["systemctl", "reload", "apache2"])
+        return False, f"Error al activar el módulo {name}"
+    ok, msg = configtest()
+    if not ok:
+        _run_apache_cmd(["a2dismod", name])
+        return False, msg
+    _run_sudo(["systemctl", "reload", "apache2"])
+    return True, ""
 
 
-def disable_module(name: str) -> bool:
+def disable_module(name: str) -> tuple[bool, str]:
     if not _run_apache_cmd(["a2dismod", name]):
-        return False
-    return _run_sudo(["systemctl", "reload", "apache2"])
+        return False, f"Error al desactivar el módulo {name}"
+    ok, msg = configtest()
+    if not ok:
+        _run_apache_cmd(["a2enmod", name])
+        return False, msg
+    _run_sudo(["systemctl", "reload", "apache2"])
+    return True, ""
