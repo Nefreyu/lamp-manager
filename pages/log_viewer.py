@@ -93,6 +93,7 @@ class LogViewer(Gtk.Box):
         self._scrolled.set_child(self._textview)
         self.append(self._scrolled)
 
+        self._scrolled.connect("realize", lambda _: GLib.idle_add(self._scroll_to_bottom))
         self._load()
         self._start_auto_refresh()
         self.connect("destroy", lambda _: self._stop_auto_refresh())
@@ -120,7 +121,10 @@ class LogViewer(Gtk.Box):
             return
 
         adj = self._scrolled.get_vadjustment()
-        at_bottom = adj.get_upper() - adj.get_page_size() - adj.get_value() < 20
+        at_bottom = (
+            self._last_content is None
+            or adj.get_upper() - adj.get_page_size() - adj.get_value() < 20
+        )
 
         if self._last_content is not None and text.startswith(self._last_content):
             self._insert_colored(text[len(self._last_content):])
