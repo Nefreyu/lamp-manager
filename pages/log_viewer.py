@@ -40,11 +40,11 @@ class LogViewer(Gtk.Box):
 
         header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
 
-        path_label = Gtk.Label()
-        path_label.set_markup(f"<span size='small' color='gray'>{path}</span>")
-        path_label.set_xalign(0)
-        path_label.set_hexpand(True)
-        header.append(path_label)
+        self._path_label = Gtk.Label()
+        self._path_label.set_markup(f"<span size='small' color='gray'>{path}</span>")
+        self._path_label.set_xalign(0)
+        self._path_label.set_hexpand(True)
+        header.append(self._path_label)
 
         clear_btn = Gtk.Button()
         clear_btn.set_icon_name("edit-clear-all-symbolic")
@@ -97,6 +97,12 @@ class LogViewer(Gtk.Box):
         self._load()
         self._start_auto_refresh()
         self.connect("destroy", lambda _: self._stop_auto_refresh())
+
+    def set_path(self, path: str):
+        self._path = path
+        self._path_label.set_markup(f"<span size='small' color='gray'>{path}</span>")
+        self._last_content = None
+        self._load()
 
     def _insert_colored(self, text: str):
         for line in text.splitlines(keepends=True):

@@ -147,11 +147,17 @@ def vhost_has_https(name: str) -> bool:
     return (CERTS_DIR / f"{name}.test.pem").exists()
 
 
+VHOST_ERROR_LOG = "/var/log/apache2/{name}.test-error.log"
+VHOST_ACCESS_LOG = "/var/log/apache2/{name}.test-access.log"
+
+
 def _vhost_config(name: str, docroot: str, https: bool = False) -> str:
     directory_block = f"""    <Directory {docroot}>
         AllowOverride All
         Require all granted
     </Directory>"""
+    error_log = VHOST_ERROR_LOG.format(name=name)
+    access_log = VHOST_ACCESS_LOG.format(name=name)
 
     if https:
         return f"""<VirtualHost *:80>
@@ -162,6 +168,8 @@ def _vhost_config(name: str, docroot: str, https: bool = False) -> str:
 <VirtualHost *:443>
     ServerName {name}.test
     DocumentRoot {docroot}
+    ErrorLog {error_log}
+    CustomLog {access_log} combined
     SSLEngine on
     SSLCertificateFile {CERTS_DIR}/{name}.test.pem
     SSLCertificateKeyFile {CERTS_DIR}/{name}.test-key.pem
@@ -171,9 +179,47 @@ def _vhost_config(name: str, docroot: str, https: bool = False) -> str:
     return f"""<VirtualHost *:80>
     ServerName {name}.test
     DocumentRoot {docroot}
+    ErrorLog {error_log}
+    CustomLog {access_log} combined
 {directory_block}
 </VirtualHost>
 """
+
+
+def ensure_vhost_logs(name: str) -> bool:
+    config = vhost_config_path(name)
+    if not config.exists():
+        return False
+    content = _run_sudo_output(["cat", str(config)]) or ""
+    if "ErrorLog" in content or "CustomLog" in content:
+        return True
+    error_log = VHOST_ERROR_LOG.format(name=name)
+    access_log = VHOST_ACCESS_LOG.format(name=name)
+    log_lines = f"    ErrorLog {error_log}\n    CustomLog {access_log} combined\n"
+    last_idx = content.rfind("</VirtualHost>")
+    if last_idx == -1:
+        return False
+    new_content = content[:last_idx] + log_lines + content[last_idx:]
+    if not _sudo_write_file(str(config), new_content):
+        return False
+    return _run_sudo(["systemctl", "reload", "apache2"])
+
+
+def get_vhost_log_paths(name: str) -> tuple[str, str]:
+    default_error = VHOST_ERROR_LOG.format(name=name)
+    default_access = VHOST_ACCESS_LOG.format(name=name)
+    content = _run_sudo_output(["cat", str(vhost_config_path(name))]) or ""
+    error_log = default_error
+    access_log = default_access
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("ErrorLog "):
+            error_log = stripped[len("ErrorLog "):].strip()
+        elif stripped.startswith("CustomLog "):
+            parts = stripped[len("CustomLog "):].strip().split()
+            if parts:
+                access_log = parts[0]
+    return error_log, access_log
 
 
 def _ensure_localhost_ssl():

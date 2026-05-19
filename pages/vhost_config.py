@@ -2,8 +2,9 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, GLib
 
-from services.vhosts import get_docroot, update_docroot, vhost_config_path
+from services.vhosts import get_docroot, update_docroot, vhost_config_path, get_vhost_log_paths, ensure_vhost_logs
 from services.systemd import _run_sudo_output, _sudo_write_file
+from pages.log_viewer import LogViewer
 
 
 class VHostConfigPage(Gtk.Box):
@@ -27,6 +28,7 @@ class VHostConfigPage(Gtk.Box):
         self.append(self.title)
         self.append(Gtk.Separator())
 
+        # DocumentRoot — siempre visible, fuera del notebook
         docroot_label = Gtk.Label(label="DocumentRoot")
         docroot_label.set_xalign(0)
         self.append(docroot_label)
@@ -42,23 +44,31 @@ class VHostConfigPage(Gtk.Box):
         folder_btn.set_tooltip_text("Seleccionar directorio")
         folder_btn.connect("clicked", self.on_choose_folder)
         entry_box.append(folder_btn)
-        self.append(entry_box)
 
         save_docroot_btn = Gtk.Button(label="Guardar")
         save_docroot_btn.add_css_class("suggested-action")
-        save_docroot_btn.set_halign(Gtk.Align.START)
+        save_docroot_btn.set_valign(Gtk.Align.CENTER)
         save_docroot_btn.connect("clicked", self.on_save_docroot)
-        self.append(save_docroot_btn)
+        entry_box.append(save_docroot_btn)
+        self.append(entry_box)
+
+        self.status_label = Gtk.Label(label="")
+        self.status_label.set_xalign(0)
+        self.append(self.status_label)
 
         self.append(Gtk.Separator())
 
-        raw_label = Gtk.Label(label="Configuración completa")
-        raw_label.set_xalign(0)
-        self.append(raw_label)
+        # Notebook: config raw + logs
+        notebook = Gtk.Notebook()
+        notebook.set_vexpand(True)
+        self.append(notebook)
+
+        # ── Pestaña Configuración ──
+        config_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        config_box.set_margin_top(12)
 
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_vexpand(True)
-        scrolled.set_min_content_height(200)
         self.raw_view = Gtk.TextView()
         self.raw_view.set_monospace(True)
         self.raw_view.set_top_margin(8)
@@ -66,24 +76,36 @@ class VHostConfigPage(Gtk.Box):
         self.raw_view.set_left_margin(8)
         self.raw_view.set_right_margin(8)
         scrolled.set_child(self.raw_view)
-        self.append(scrolled)
+        config_box.append(scrolled)
 
-        save_raw_btn = Gtk.Button(label="Guardar configuración completa")
+        save_raw_btn = Gtk.Button(label="Guardar configuración")
         save_raw_btn.set_halign(Gtk.Align.START)
         save_raw_btn.connect("clicked", self.on_save_raw)
-        self.append(save_raw_btn)
+        config_box.append(save_raw_btn)
 
-        self.status_label = Gtk.Label(label="")
-        self.status_label.set_xalign(0)
-        self.append(self.status_label)
+        notebook.append_page(config_box, Gtk.Label(label="Configuración"))
+
+        # ── Pestaña Log de errores ──
+        self._error_log_viewer = LogViewer("/dev/null")
+        self._error_log_viewer.set_margin_top(12)
+        notebook.append_page(self._error_log_viewer, Gtk.Label(label="Log de errores"))
+
+        # ── Pestaña Log de accesos ──
+        self._access_log_viewer = LogViewer("/dev/null")
+        self._access_log_viewer.set_margin_top(12)
+        notebook.append_page(self._access_log_viewer, Gtk.Label(label="Log de accesos"))
 
     def load(self, name: str):
         self._name = name
         self.title.set_markup(f"<span size='x-large' weight='bold'>{name}.test</span>")
+        ensure_vhost_logs(name)
         self.docroot_entry.set_text(get_docroot(name))
         content = _run_sudo_output(["cat", str(vhost_config_path(name))]) or ""
         self.raw_view.get_buffer().set_text(content)
         self.status_label.set_markup("")
+        error_log, access_log = get_vhost_log_paths(name)
+        self._error_log_viewer.set_path(error_log)
+        self._access_log_viewer.set_path(access_log)
 
     def on_choose_folder(self, button):
         dialog = Gtk.FileDialog()
