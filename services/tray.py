@@ -124,8 +124,39 @@ class SystemTray:
                 "org.kde.StatusNotifierItem", "NewStatus",
                 GLib.Variant("(s)", ("Active",)),
             )
+            GLib.idle_add(self._do_icon_check)
+            GLib.timeout_add_seconds(30, self._auto_icon_check)
         except Exception as e:
             log.error("Error al registrar con StatusNotifierWatcher: %s", e)
+
+    def _auto_icon_check(self):
+        self._do_icon_check()
+        return True
+
+    def _do_icon_check(self):
+        try:
+            from services.systemd import SERVICES, get_status, is_installed
+            installed = [s for s in SERVICES if is_installed(s) and not s.get("web_only")]
+            if not installed:
+                return False
+            statuses = {s["id"]: get_status(s["id"]) for s in installed}
+            active = sum(1 for v in statuses.values() if v)
+            if active == len(installed):
+                icon = "io.github.nefreyu.LampManager"
+            elif active == 0:
+                icon = "io.github.nefreyu.LampManager-error"
+            else:
+                icon = "io.github.nefreyu.LampManager-warning"
+            current = self._sni_props["IconName"].unpack()
+            if icon != current:
+                self._sni_props["IconName"] = GLib.Variant("s", icon)
+                self._bus.emit_signal(
+                    None, "/StatusNotifierItem",
+                    "org.kde.StatusNotifierItem", "NewIcon", None,
+                )
+        except Exception as e:
+            log.warning("Error al comprobar estado para icono del tray: %s", e)
+        return False
 
     def _on_name_lost(self, conn, name):
         pass

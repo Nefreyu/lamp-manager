@@ -350,6 +350,7 @@ class ServiciosPage(Gtk.Box):
         self.append(refresh_btn)
 
         self._check_fpm_warning()
+        self.connect("map", lambda *_: GLib.idle_add(self.on_refresh, None))
         GLib.timeout_add_seconds(30, self._auto_refresh)
 
     def _check_fpm_warning(self):
