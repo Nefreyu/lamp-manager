@@ -6,7 +6,7 @@ from gi.repository import Gtk, Gio, GLib, Gdk
 from config import settings
 import threading
 from services.vhosts import (
-    list_projects, vhost_config_path, vhost_is_enabled,
+    list_projects, list_orphan_folders, vhost_config_path, vhost_is_enabled,
     create_vhost, enable_vhost, disable_vhost,
     is_mkcert_installed, vhost_has_https, enable_https, disable_https,
     FRAMEWORKS, is_command_installed, scaffold_project,
@@ -179,6 +179,48 @@ class VHostRow(Gtk.Box):
         self.on_status(False, f"Error al mover {self.name} a la papelera")
 
 
+class OrphanRow(Gtk.Box):
+    def __init__(self, name: str, on_registered, on_status):
+        super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        self.add_css_class("item-row")
+        self.name = name
+        self.on_registered = on_registered
+        self.on_status = on_status
+
+        icon = Gtk.Image.new_from_icon_name("folder-symbolic")
+        icon.set_valign(Gtk.Align.CENTER)
+        self.append(icon)
+
+        name_label = Gtk.Label(label=name)
+        name_label.set_xalign(0)
+        name_label.set_hexpand(True)
+        self.append(name_label)
+
+        register_btn = Gtk.Button(label="Registrar como vhost")
+        register_btn.add_css_class("suggested-action")
+        register_btn.set_valign(Gtk.Align.CENTER)
+        register_btn.connect("clicked", self._on_register)
+        self.append(register_btn)
+
+    def _on_register(self, button):
+        button.set_sensitive(False)
+        button.set_label("Registrando…")
+        projects_dir = settings.get("general", "projects_dir")
+
+        def run():
+            ok = create_vhost(self.name, projects_dir)
+            GLib.idle_add(self._finish, ok)
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _finish(self, ok):
+        if ok:
+            self.on_status(True, f"Proyecto {self.name}.test registrado correctamente.")
+            self.on_registered()
+        else:
+            self.on_status(False, f"Error al registrar {self.name}.test.")
+
+
 class VHostsPage(Gtk.Box):
     def __init__(self, navigate_to_vhost_config, navigate_to):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -227,6 +269,10 @@ class VHostsPage(Gtk.Box):
         self.list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.append(self.list_box)
 
+        self.orphan_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.append(self.orphan_section)
+
+        self.connect("map", lambda *_: self._load_projects())
         self._load_projects()
 
     def _set_status(self, success: bool, message: str):
@@ -241,6 +287,8 @@ class VHostsPage(Gtk.Box):
     def _load_projects(self):
         while child := self.list_box.get_first_child():
             self.list_box.remove(child)
+        while child := self.orphan_section.get_first_child():
+            self.orphan_section.remove(child)
 
         projects = list_projects()
 
@@ -248,11 +296,36 @@ class VHostsPage(Gtk.Box):
             empty_label = Gtk.Label(label="No hay proyectos en el directorio configurado.")
             empty_label.set_xalign(0)
             self.list_box.append(empty_label)
-            return
+        else:
+            for name in projects:
+                row = VHostRow(name, on_deleted=self._load_projects, on_status=self._set_status, on_configure=self._navigate_to_vhost_config)
+                self.list_box.append(row)
 
-        for name in projects:
-            row = VHostRow(name, on_deleted=self._load_projects, on_status=self._set_status, on_configure=self._navigate_to_vhost_config)
-            self.list_box.append(row)
+        projects_dir = settings.get("general", "projects_dir")
+        orphans = list_orphan_folders(projects_dir)
+        if orphans:
+            sep = Gtk.Separator()
+            sep.set_margin_top(12)
+            self.orphan_section.append(sep)
+
+            orphan_title = Gtk.Label()
+            orphan_title.set_markup("<span weight='bold'>Sitios no registrados</span>")
+            orphan_title.set_xalign(0)
+            orphan_title.set_margin_top(6)
+            self.orphan_section.append(orphan_title)
+
+            orphan_subtitle = Gtk.Label()
+            orphan_subtitle.set_markup(
+                "<span color='gray' size='small'>"
+                "Carpetas detectadas en el directorio de proyectos sin vhost asociado."
+                "</span>"
+            )
+            orphan_subtitle.set_xalign(0)
+            self.orphan_section.append(orphan_subtitle)
+
+            for name in orphans:
+                row = OrphanRow(name, on_registered=self._load_projects, on_status=self._set_status)
+                self.orphan_section.append(row)
 
     def on_new_project(self, button):
         projects_dir = settings.get("general", "projects_dir")

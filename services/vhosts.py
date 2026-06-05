@@ -133,6 +133,17 @@ def slugify(name: str) -> str:
     return s
 
 
+def list_orphan_folders(projects_dir: str) -> list[str]:
+    existing = set(list_projects())
+    base = Path(projects_dir)
+    if not base.exists():
+        return []
+    return sorted(
+        d.name for d in base.iterdir()
+        if d.is_dir() and d.name not in existing
+    )
+
+
 def list_projects() -> list[str]:
     if not APACHE_SITES_AVAILABLE.exists():
         return []
