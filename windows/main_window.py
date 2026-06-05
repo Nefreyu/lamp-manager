@@ -233,12 +233,9 @@ class MainWindow(Adw.ApplicationWindow):
         self.dialog.present()
 
     def on_password_success(self, password):
-        if validate_password(password):
-            set_password(password)
-            save_sudo_password(password)
-            self.dialog.close()
-        else:
-            self.dialog.show_error()
+        set_password(password)
+        save_sudo_password(password)
+        self.dialog.close()
 
     def on_password_cancel(self):
         self.dialog.close()
