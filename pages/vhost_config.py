@@ -78,12 +78,13 @@ class VHostConfigPage(Gtk.Box):
         scrolled.set_child(self.raw_view)
         config_box.append(scrolled)
 
+        notebook.append_page(config_box, Gtk.Label(label="Configuración"))
+
         save_raw_btn = Gtk.Button(label="Guardar configuración")
+        save_raw_btn.add_css_class("suggested-action")
         save_raw_btn.set_halign(Gtk.Align.START)
         save_raw_btn.connect("clicked", self.on_save_raw)
-        config_box.append(save_raw_btn)
-
-        notebook.append_page(config_box, Gtk.Label(label="Configuración"))
+        self.append(save_raw_btn)
 
         # ── Pestaña Log de errores ──
         self._error_log_viewer = LogViewer("/dev/null")

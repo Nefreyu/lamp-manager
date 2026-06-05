@@ -44,6 +44,13 @@ class VHostRow(Gtk.Box):
         self.link_button.connect("clicked", self.on_open_url)
         self.append(self.link_button)
 
+        folder_btn = Gtk.Button()
+        folder_btn.set_icon_name("folder-symbolic")
+        folder_btn.set_tooltip_text("Abrir carpeta del proyecto")
+        folder_btn.set_valign(Gtk.Align.CENTER)
+        folder_btn.connect("clicked", self.on_open_folder)
+        self.append(folder_btn)
+
         self.https_button = Gtk.Button()
         self.https_button.set_valign(Gtk.Align.CENTER)
         self.https_button.set_tooltip_text("Activar/desactivar HTTPS")
@@ -91,6 +98,11 @@ class VHostRow(Gtk.Box):
     def on_open_url(self, button):
         protocol = "https" if vhost_has_https(self.name) else "http"
         Gio.AppInfo.launch_default_for_uri(f"{protocol}://{self.name}.test", None)
+
+    def on_open_folder(self, button):
+        projects_dir = settings.get("general", "projects_dir")
+        folder = Gio.File.new_for_path(f"{projects_dir}/{self.name}")
+        Gio.AppInfo.launch_default_for_uri(folder.get_uri(), None)
 
     def on_https_clicked(self, button):
         if not is_mkcert_installed():
