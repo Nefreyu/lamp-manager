@@ -1,7 +1,10 @@
 import gi
+import logging
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, Gio, GLib
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 from services.mysql import (
     get_conf_path, MYSQL_ERROR_LOG, MYSQL_SLOW_LOG,
@@ -382,5 +385,5 @@ class MysqlConfigPage(Gtk.Box):
         except Exception:
             try:
                 Gio.AppInfo.launch_default_for_uri(f"file://{path}", None)
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning("No se pudo abrir el archivo %s: %s", path, e)

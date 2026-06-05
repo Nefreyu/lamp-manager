@@ -1,7 +1,10 @@
 import os
 import gi
+import logging
 from pathlib import Path
 from gi.repository import Gio, GLib
+
+log = logging.getLogger(__name__)
 
 gi.require_version('Dbusmenu', '0.4')
 from gi.repository import Dbusmenu
@@ -71,7 +74,7 @@ class SystemTray:
             )
             return True
         except Exception as e:
-            print(f"[tray] Error al iniciar: {e}")
+            log.error("Error al iniciar el tray: %s", e)
             return False
 
     def set_window_visible(self, visible: bool):
@@ -122,7 +125,7 @@ class SystemTray:
                 GLib.Variant("(s)", ("Active",)),
             )
         except Exception as e:
-            print(f"[tray] Error al registrar con watcher: {e}")
+            log.error("Error al registrar con StatusNotifierWatcher: %s", e)
 
     def _on_name_lost(self, conn, name):
         pass

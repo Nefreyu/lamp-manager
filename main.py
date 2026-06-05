@@ -1,6 +1,10 @@
 import gi
 import os
+import logging
 from pathlib import Path
+
+from config import log as _log_setup
+_log_setup.setup()
 
 try:
     from config.dev import DEV_MODE, SKIP_PASSWORD_DIALOG

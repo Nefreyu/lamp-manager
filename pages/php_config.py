@@ -1,7 +1,10 @@
 import gi
+import logging
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, Gio, GLib
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 from services.php import (
     get_installed_version,
@@ -224,8 +227,8 @@ class PhpConfigPage(Gtk.Box):
         except Exception:
             try:
                 Gio.AppInfo.launch_default_for_uri(f"file://{path}", None)
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning("No se pudo abrir el archivo %s: %s", path, e)
 
     def _load_extensions(self):
         while child := self.listbox.get_first_child():
