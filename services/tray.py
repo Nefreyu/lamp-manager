@@ -140,6 +140,23 @@ class SystemTray:
             if not installed:
                 return False
             statuses = {s["id"]: get_status(s["id"]) for s in installed}
+
+            if hasattr(self, "_prev_statuses"):
+                app = Gio.Application.get_default()
+                window_hidden = app is None or not any(
+                    w.is_visible() for w in (app.get_windows() or [])
+                )
+                if window_hidden:
+                    for s in installed:
+                        sid = s["id"]
+                        was_active = self._prev_statuses.get(sid, True)
+                        is_active = statuses[sid]
+                        if was_active and not is_active:
+                            self._notify_service_down(s["label"])
+                        elif not was_active and is_active:
+                            self._notify_service_up(s["label"])
+            self._prev_statuses = statuses
+
             active = sum(1 for v in statuses.values() if v)
             if active == len(installed):
                 icon = "io.github.nefreyu.LampManager"
@@ -157,6 +174,30 @@ class SystemTray:
         except Exception as e:
             log.warning("Error al comprobar estado para icono del tray: %s", e)
         return False
+
+    def _notify_service_down(self, service_label: str):
+        try:
+            app = Gio.Application.get_default()
+            if app is None:
+                return
+            notification = Gio.Notification.new("Servicio detenido")
+            notification.set_body(f"{service_label} se ha detenido inesperadamente.")
+            notification.set_icon(Gio.ThemedIcon.new("dialog-warning-symbolic"))
+            app.send_notification(f"service-down-{service_label}", notification)
+        except Exception as e:
+            log.warning("Error al enviar notificación: %s", e)
+
+    def _notify_service_up(self, service_label: str):
+        try:
+            app = Gio.Application.get_default()
+            if app is None:
+                return
+            notification = Gio.Notification.new("Servicio restaurado")
+            notification.set_body(f"{service_label} está activo de nuevo.")
+            notification.set_icon(Gio.ThemedIcon.new("emblem-ok-symbolic"))
+            app.send_notification(f"service-up-{service_label}", notification)
+        except Exception as e:
+            log.warning("Error al enviar notificación: %s", e)
 
     def _on_name_lost(self, conn, name):
         pass
