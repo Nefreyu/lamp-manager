@@ -1,5 +1,6 @@
 import gi
 import os
+import sys
 import logging
 from pathlib import Path
 
@@ -70,6 +71,8 @@ GLib.set_application_name("LAMP Manager")
 from windows.main_window import MainWindow
 from windows.splash_window import SplashWindow
 from services.tray import SystemTray
+from services.keyring import get_sudo_password
+from services.systemd import validate_password, set_password
 
 
 class App(Adw.Application):
@@ -78,16 +81,17 @@ class App(Adw.Application):
         self.connect("activate", self.on_activate)
 
     def on_activate(self, app):
+        self._autostart = "--autostart" in sys.argv
+        self._window = MainWindow(self)
         self._splash = SplashWindow(app)
         self._splash.present()
         self._splash_start = GLib.get_monotonic_time()
         GLib.idle_add(self._build_main)
 
     def _build_main(self):
-        self._window = MainWindow(self)
         elapsed_ms = (GLib.get_monotonic_time() - self._splash_start) // 1000
         remaining = max(0, 1200 - elapsed_ms)
-        GLib.timeout_add(remaining, self._show_main)
+        GLib.timeout_add(remaining, self._show_silent if self._autostart else self._show_main)
         return False
 
     def _show_main(self):
@@ -95,14 +99,30 @@ class App(Adw.Application):
         GLib.idle_add(self._splash.close)
         if not (DEV_MODE and SKIP_PASSWORD_DIALOG):
             GLib.idle_add(self._window.request_password)
+        self._setup_tray(window_visible=True)
+        return False
+
+    def _show_silent(self):
+        GLib.idle_add(self._splash.close)
+        stored = get_sudo_password()
+        if stored and validate_password(stored):
+            set_password(stored)
+            self._setup_tray(window_visible=False)
+        else:
+            self._window.present()
+            if not (DEV_MODE and SKIP_PASSWORD_DIALOG):
+                GLib.idle_add(self._window.request_password)
+            self._setup_tray(window_visible=True)
+        return False
+
+    def _setup_tray(self, window_visible: bool):
         def _toggle():
             self._window.toggle_visibility()
             self._tray.set_window_visible(self._window.is_visible())
-
         self._tray = SystemTray(_toggle, self.quit)
         self._tray.start()
         self._window.connect("hide", lambda *_: self._tray.set_window_visible(False))
-        return False
+        self._tray.set_window_visible(window_visible)
             
 
 if __name__ == "__main__":

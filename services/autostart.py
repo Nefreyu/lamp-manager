@@ -28,7 +28,7 @@ def enable():
             "[Desktop Entry]\n"
             "Type=Application\n"
             "Name=LAMP Manager\n"
-            f"Exec={_get_exec_line()}\n"
+            f"Exec={_get_exec_line()} --autostart\n"
             "Icon=io.github.nefreyu.LampManager\n"
             "Terminal=false\n"
             "Hidden=false\n"
