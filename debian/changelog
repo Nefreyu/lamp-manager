@@ -1,3 +1,17 @@
+lamp-manager (0.2.0) resolute; urgency=medium
+
+  * Icono del tray dinámico: azul (todo activo), naranja (algún servicio parado), rojo (todos parados).
+  * Notificaciones de escritorio al detenerse o restaurarse un servicio mientras la app está en el tray.
+  * Opción de arranque automático con el sistema desde los ajustes.
+  * Arranque silencioso en segundo plano cuando se lanza por autoarranque.
+  * Auto-refresco del panel de servicios cada 30 segundos y al abrir la ventana.
+  * Validación de contraseña en hilo secundario con límite de 3 intentos.
+  * Menú de bandeja dinámico (Mostrar/Ocultar) y opción de minimizar al cerrar.
+  * Logging centralizado con rotación de archivos en ~/.local/share/lamp-manager/.
+  * Slugify automático del nombre de vhost con previsualización en tiempo real.
+
+ -- Juan Díez <nefreyu.99@gmail.com>  Thu, 05 Jun 2026 00:00:00 +0200
+
 lamp-manager (0.1.1) resolute; urgency=medium
 
   * Guardar contraseña sudo en GNOME Keyring para no pedirla en cada arranque.
