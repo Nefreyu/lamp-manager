@@ -34,6 +34,18 @@ class AjustesPage(Gtk.Box):
         projects_box.append(self.projects_entry)
         self.append(projects_box)
 
+        tray_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        tray_label = Gtk.Label(label="Minimizar al área de notificación al cerrar")
+        tray_label.set_xalign(0)
+        tray_label.set_hexpand(True)
+        tray_row.append(tray_label)
+        self.tray_switch = Gtk.Switch()
+        self.tray_switch.set_active(settings.get("general", "minimize_to_tray") == "true")
+        self.tray_switch.set_valign(Gtk.Align.CENTER)
+        self.tray_switch.connect("state-set", self._on_tray_switch)
+        tray_row.append(self.tray_switch)
+        self.append(tray_row)
+
         save_btn = Gtk.Button(label="Guardar")
         save_btn.add_css_class("suggested-action")
         save_btn.set_halign(Gtk.Align.START)
@@ -42,6 +54,10 @@ class AjustesPage(Gtk.Box):
 
         self.confirm_label = Gtk.Label(label="")
         self.append(self.confirm_label)
+
+    def _on_tray_switch(self, switch, state):
+        settings.set("general", "minimize_to_tray", "true" if state else "false")
+        return False
 
     def on_save(self, button):
         settings.set("general", "projects_dir", self.projects_entry.get_text())

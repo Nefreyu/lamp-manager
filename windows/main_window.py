@@ -212,8 +212,11 @@ class MainWindow(Adw.ApplicationWindow):
             GLib.idle_add(self.vhost_trash_page.refresh)
 
     def _on_close_request(self, _):
-        self.set_visible(False)
-        return True
+        from config import settings
+        if settings.get("general", "minimize_to_tray") == "true":
+            self.set_visible(False)
+            return True
+        return False
 
     def toggle_visibility(self):
         if self.is_visible():

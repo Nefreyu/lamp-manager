@@ -91,8 +91,13 @@ class App(Adw.Application):
         GLib.idle_add(self._splash.close)
         if not (DEV_MODE and SKIP_PASSWORD_DIALOG):
             GLib.idle_add(self._window.request_password)
-        self._tray = SystemTray(self._window.toggle_visibility, self.quit)
+        def _toggle():
+            self._window.toggle_visibility()
+            self._tray.set_window_visible(self._window.is_visible())
+
+        self._tray = SystemTray(_toggle, self.quit)
         self._tray.start()
+        self._window.connect("hide", lambda *_: self._tray.set_window_visible(False))
         return False
             
 
