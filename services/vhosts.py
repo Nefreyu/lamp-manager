@@ -1,7 +1,9 @@
 import getpass
 import io
 import json
+import logging
 import os
+import re
 import shlex
 import subprocess
 import urllib.request
@@ -9,6 +11,8 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 from services.systemd import _run_sudo, _sudo_write_file, _run_sudo_output, _run_sudo_feed
+
+log = logging.getLogger(__name__)
 
 _FRAMEWORKS_FILE = Path.home() / ".config" / "lamp-manager" / "frameworks.json"
 
@@ -46,16 +50,16 @@ def load_frameworks() -> list[dict]:
     if _FRAMEWORKS_FILE.exists():
         try:
             return json.loads(_FRAMEWORKS_FILE.read_text())
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning("No se pudo leer frameworks.json: %s", e)
     else:
         try:
             _FRAMEWORKS_FILE.parent.mkdir(parents=True, exist_ok=True)
             _FRAMEWORKS_FILE.write_text(
                 json.dumps(_DEFAULT_FRAMEWORKS, indent=2, ensure_ascii=False)
             )
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning("No se pudo crear frameworks.json: %s", e)
     return _DEFAULT_FRAMEWORKS
 
 
@@ -108,6 +112,7 @@ def scaffold_project(framework: dict, name: str, projects_dir: str, on_progress=
             base.mkdir(parents=True, exist_ok=True)
         return True, None
     except Exception as e:
+        log.error("Error al crear el proyecto '%s': %s", name, e)
         return False, str(e)
 
 HOSTS_FILE = Path("/etc/hosts")
@@ -118,6 +123,14 @@ INDEX_PAGE = Path("/var/www/html/index.html")
 INDEX_BACKUP = Path("/var/www/html/index.html.lamp-manager.bak")
 CERTS_DIR = Path.home() / ".local/share/lamp-manager/certs"
 TRASH_DIR = Path.home() / ".local/share/lamp-manager/trash"
+
+
+def slugify(name: str) -> str:
+    s = name.lower()
+    s = re.sub(r'[^a-z0-9]+', '-', s)
+    s = s.strip('-')
+    s = s[:63].rstrip('-')
+    return s
 
 
 def list_projects() -> list[str]:
@@ -532,8 +545,8 @@ def list_trash() -> list[dict]:
         if meta_path.exists():
             try:
                 items.append(json.loads(meta_path.read_text()))
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning("No se pudo leer metadatos de papelera %s: %s", meta_path, e)
     return sorted(items, key=lambda x: x.get("deleted_at", ""), reverse=True)
 
 

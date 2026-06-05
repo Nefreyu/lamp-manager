@@ -10,7 +10,7 @@ from services.vhosts import (
     create_vhost, enable_vhost, disable_vhost,
     is_mkcert_installed, vhost_has_https, enable_https, disable_https,
     FRAMEWORKS, is_command_installed, scaffold_project,
-    trash_vhost,
+    trash_vhost, slugify,
 )
 
 
@@ -260,8 +260,12 @@ class VHostsPage(Gtk.Box):
         content.append(name_label)
 
         entry = Gtk.Entry()
-        entry.set_placeholder_text("mi-proyecto")
+        entry.set_placeholder_text("Mi Proyecto")
         content.append(entry)
+
+        slug_label = Gtk.Label()
+        slug_label.set_xalign(0)
+        content.append(slug_label)
 
         fw_label = Gtk.Label(label="Framework:")
         fw_label.set_xalign(0)
@@ -306,10 +310,34 @@ class VHostsPage(Gtk.Box):
 
         create_btn = Gtk.Button(label="Crear")
         create_btn.add_css_class("suggested-action")
+        create_btn.set_sensitive(False)
         create_btn.connect("clicked", lambda _: dialog.response(Gtk.ResponseType.OK))
         btn_box.append(create_btn)
 
         content.append(btn_box)
+
+        def _fw_requires_ok():
+            fw = FRAMEWORKS[fw_dropdown.get_selected()]
+            return not fw.get("requires") or is_command_installed(fw["requires"])
+
+        def _update_create_btn(slug):
+            create_btn.set_sensitive(bool(slug) and not vhost_config_path(slug).exists() and _fw_requires_ok())
+
+        def on_name_changed(e):
+            slug = slugify(e.get_text())
+            if not e.get_text().strip():
+                slug_label.set_markup("")
+                error_label.set_markup("")
+            elif not slug:
+                slug_label.set_markup("")
+                error_label.set_markup("<span color='red'>El nombre no contiene caracteres válidos.</span>")
+            elif vhost_config_path(slug).exists():
+                slug_label.set_markup(f"<span color='gray' size='small'>→ {slug}.test</span>")
+                error_label.set_markup(f"<span color='red'>Ya existe un proyecto llamado '{slug}'.</span>")
+            else:
+                slug_label.set_markup(f"<span color='gray' size='small'>→ {slug}.test</span>")
+                error_label.set_markup("")
+            _update_create_btn(slug)
 
         def on_framework_changed(dropdown, _):
             fw = FRAMEWORKS[dropdown.get_selected()]
@@ -321,9 +349,10 @@ class VHostsPage(Gtk.Box):
                 create_btn.set_sensitive(False)
             else:
                 warn_label.set_markup("")
-                create_btn.set_sensitive(True)
+                _update_create_btn(slugify(entry.get_text()))
 
         fw_dropdown.connect("notify::selected", on_framework_changed)
+        entry.connect("changed", on_name_changed)
         entry.connect("activate", lambda e: dialog.response(Gtk.ResponseType.OK))
 
         def on_response(d, response):
@@ -331,9 +360,12 @@ class VHostsPage(Gtk.Box):
                 d.destroy()
                 return
 
-            name = entry.get_text().strip()
+            name = slugify(entry.get_text())
             if not name:
-                error_label.set_markup("<span color='red'>El nombre no puede estar vacío.</span>")
+                error_label.set_markup("<span color='red'>El nombre no contiene caracteres válidos.</span>")
+                return
+            if vhost_config_path(name).exists():
+                error_label.set_markup(f"<span color='red'>Ya existe un proyecto llamado '{name}'.</span>")
                 return
 
             fw = FRAMEWORKS[fw_dropdown.get_selected()]

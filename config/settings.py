@@ -13,6 +13,7 @@ DEFAULTS = {
     },
     "general": {
         "projects_dir": str(Path.home() / "www"),
+        "minimize_to_tray": "true",
     }
 }
 

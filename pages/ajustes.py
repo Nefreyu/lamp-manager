@@ -3,6 +3,7 @@ gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk
 
 from config import settings
+from services.autostart import is_enabled as autostart_is_enabled, enable as autostart_enable, disable as autostart_disable
 
 
 class AjustesPage(Gtk.Box):
@@ -34,6 +35,30 @@ class AjustesPage(Gtk.Box):
         projects_box.append(self.projects_entry)
         self.append(projects_box)
 
+        autostart_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        autostart_label = Gtk.Label(label="Iniciar al arrancar el sistema")
+        autostart_label.set_xalign(0)
+        autostart_label.set_hexpand(True)
+        autostart_row.append(autostart_label)
+        self.autostart_switch = Gtk.Switch()
+        self.autostart_switch.set_active(autostart_is_enabled())
+        self.autostart_switch.set_valign(Gtk.Align.CENTER)
+        self.autostart_switch.connect("state-set", self._on_autostart_switch)
+        autostart_row.append(self.autostart_switch)
+        self.append(autostart_row)
+
+        tray_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        tray_label = Gtk.Label(label="Minimizar al área de notificación al cerrar")
+        tray_label.set_xalign(0)
+        tray_label.set_hexpand(True)
+        tray_row.append(tray_label)
+        self.tray_switch = Gtk.Switch()
+        self.tray_switch.set_active(settings.get("general", "minimize_to_tray") == "true")
+        self.tray_switch.set_valign(Gtk.Align.CENTER)
+        self.tray_switch.connect("state-set", self._on_tray_switch)
+        tray_row.append(self.tray_switch)
+        self.append(tray_row)
+
         save_btn = Gtk.Button(label="Guardar")
         save_btn.add_css_class("suggested-action")
         save_btn.set_halign(Gtk.Align.START)
@@ -42,6 +67,17 @@ class AjustesPage(Gtk.Box):
 
         self.confirm_label = Gtk.Label(label="")
         self.append(self.confirm_label)
+
+    def _on_autostart_switch(self, switch, state):
+        if state:
+            autostart_enable()
+        else:
+            autostart_disable()
+        return False
+
+    def _on_tray_switch(self, switch, state):
+        settings.set("general", "minimize_to_tray", "true" if state else "false")
+        return False
 
     def on_save(self, button):
         settings.set("general", "projects_dir", self.projects_entry.get_text())

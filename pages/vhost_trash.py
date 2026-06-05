@@ -1,10 +1,13 @@
 import gi
+import logging
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, GLib
 
 import threading
 from datetime import datetime
 from services.vhosts import list_trash, restore_vhost, purge_trash_item, purge_all_trash
+
+log = logging.getLogger(__name__)
 
 
 class VHostTrashPage(Gtk.Box):
@@ -110,7 +113,8 @@ class VHostTrashPage(Gtk.Box):
         try:
             dt = datetime.fromisoformat(meta["deleted_at"])
             date_str = dt.strftime("%d/%m/%Y %H:%M")
-        except Exception:
+        except Exception as e:
+            log.warning("Fecha inválida en metadatos de papelera '%s': %s", meta.get("name"), e)
             date_str = "—"
 
         badges = []

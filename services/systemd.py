@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import shlex
@@ -5,6 +6,8 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 try:
     from config.dev import DEV_MODE, SIMULATE_NOT_INSTALLED
 except ImportError:
@@ -93,8 +96,8 @@ def _run_sudo_feed(command: list, data: str) -> bool:
             if path:
                 try:
                     os.unlink(path)
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.warning("No se pudo eliminar el archivo temporal %s: %s", path, e)
 
 
 def _sudo_write_file(dest_path: str, content: str) -> bool:

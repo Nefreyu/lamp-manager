@@ -1,8 +1,11 @@
 import gi
+import logging
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 from gi.repository import Gtk, Gio, GLib, Gdk
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 from services.systemd import (
     SERVICES, get_status, is_installed,
     start_service, stop_service, reload_service, restart_service,
@@ -276,7 +279,7 @@ class ServiceRow(Gtk.Box):
             result = start_service(self.service_id)
         else:
             result = stop_service(self.service_id)
-        print(f"Operación en {self.service_id}: {result}")
+        log.info("Operación en %s: %s", self.service_id, result)
         def after_toggle():
             self.refresh()
             if self.on_changed:
@@ -347,6 +350,8 @@ class ServiciosPage(Gtk.Box):
         self.append(refresh_btn)
 
         self._check_fpm_warning()
+        self.connect("map", lambda *_: GLib.idle_add(self.on_refresh, None))
+        GLib.timeout_add_seconds(30, self._auto_refresh)
 
     def _check_fpm_warning(self):
         apache = next((s for s in SERVICES if s["id"] == "apache2"), None)
@@ -365,6 +370,11 @@ class ServiciosPage(Gtk.Box):
         self._check_fpm_warning()
         for row in self.rows:
             row.refresh()
+
+    def _auto_refresh(self):
+        if self.get_mapped():
+            self.on_refresh(None)
+        return True
 
     def on_refresh(self, button):
         self.recommendations_panel.refresh()
