@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import os
+import re
 import shlex
 import subprocess
 import urllib.request
@@ -122,6 +123,14 @@ INDEX_PAGE = Path("/var/www/html/index.html")
 INDEX_BACKUP = Path("/var/www/html/index.html.lamp-manager.bak")
 CERTS_DIR = Path.home() / ".local/share/lamp-manager/certs"
 TRASH_DIR = Path.home() / ".local/share/lamp-manager/trash"
+
+
+def slugify(name: str) -> str:
+    s = name.lower()
+    s = re.sub(r'[^a-z0-9]+', '-', s)
+    s = s.strip('-')
+    s = s[:63].rstrip('-')
+    return s
 
 
 def list_projects() -> list[str]:
