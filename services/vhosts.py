@@ -419,7 +419,7 @@ def create_vhost(name: str, projects_dir: str) -> bool:
     project_dir = Path(projects_dir) / name
     if project_dir.exists():
         user = getpass.getuser()
-        _run_sudo(["chown", "-R", f"www-data:{user}", str(project_dir)])
+        _run_sudo(["chown", "-R", f"{user}:www-data", str(project_dir)])
         _run_sudo(["chmod", "-R", "ug+rwX", str(project_dir)])
         _run_sudo(["find", str(project_dir), "-type", "d", "-exec", "chmod", "g+s", "{}", "+"])
     if not add_hosts_entry(f"{name}.test"):
@@ -598,7 +598,7 @@ def restore_vhost(trash_id: str) -> bool:
 
     if project_dir.exists():
         user = getpass.getuser()
-        _run_sudo(["chown", "-R", f"www-data:{user}", str(project_dir)])
+        _run_sudo(["chown", "-R", f"{user}:www-data", str(project_dir)])
         _run_sudo(["chmod", "-R", "ug+rwX", str(project_dir)])
         _run_sudo(["find", str(project_dir), "-type", "d", "-exec", "chmod", "g+s", "{}", "+"])
 
