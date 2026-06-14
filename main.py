@@ -78,6 +78,7 @@ GLib.set_application_name("LAMP Manager")
 from windows.main_window import MainWindow
 from windows.splash_window import SplashWindow
 from services.tray import SystemTray
+from services.watcher import ProjectWatcher
 from services.keyring import get_sudo_password
 from services.systemd import validate_password, set_password
 
@@ -128,6 +129,8 @@ class App(Adw.Application):
             self._tray.set_window_visible(self._window.is_visible())
         self._tray = SystemTray(_toggle, self.quit)
         self._tray.start()
+        self._watcher = ProjectWatcher()
+        self._watcher.start()
         self._window.connect("hide", lambda *_: self._tray.set_window_visible(False))
         self._tray.set_window_visible(window_visible)
             
