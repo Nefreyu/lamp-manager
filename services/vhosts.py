@@ -317,28 +317,59 @@ def generate_index_page() -> bool:
         _run_sudo(["cp", str(INDEX_PAGE), str(INDEX_BACKUP)])
 
     _FW_LABELS = {
-        "laravel":   ("Laravel",    "fw-laravel"),
-        "symfony":   ("Symfony",    "fw-symfony"),
-        "wordpress": ("WordPress",  "fw-wordpress"),
-        "php":       ("PHP",        "fw-php"),
+        "laravel":   ("Laravel",   "fw-laravel"),
+        "symfony":   ("Symfony",   "fw-symfony"),
+        "wordpress": ("WordPress", "fw-wordpress"),
+        "php":       ("PHP",       "fw-php"),
     }
 
-    _ICON_GLOBE = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'
+    _ICON_GLOBE  = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'
     _ICON_FOLDER = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'
     _ICON_CODE   = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>'
 
     def _card(name):
-        docroot  = get_docroot(name)
-        has_https = vhost_has_https(name)
-        fw_id    = detect_framework(docroot)
+        docroot     = get_docroot(name)
+        has_https   = vhost_has_https(name)
+        fw_id       = detect_framework(docroot)
         fw_label, fw_cls = _FW_LABELS[fw_id]
-        protocol = "https" if has_https else "http"
-        domain   = f"{name}.test"
+        protocol    = "https" if has_https else "http"
+        domain      = f"{name}.test"
+        project_dir = str(_project_dir_from_docroot(docroot)) if docroot else ""
+
+        branch   = get_git_branch(project_dir)
+        size     = get_project_size(project_dir)
+        last_mod = get_project_last_modified(project_dir)
+        errors   = get_recent_error_count(name)
+        has_db   = database_exists(name)
+
         https_badge = (
             '<span class="badge badge-https">HTTPS</span>'
             if has_https else
             '<span class="badge badge-http">HTTP</span>'
         )
+        branch_html = (
+            f'<span class="branch-badge">'
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>'
+            f'{branch}</span>'
+            if branch else ""
+        )
+
+        stats = []
+        if size:
+            stats.append(f'<span class="stat">&#128230; {size}</span>')
+        if last_mod:
+            stats.append(f'<span class="stat">&#128336; {last_mod}</span>')
+        if errors > 0:
+            label = "error" if errors == 1 else "errores"
+            stats.append(f'<span class="stat stat-error">&#9888; {errors} {label}</span>')
+        if has_db:
+            stats.append('<span class="stat stat-db">&#128451; Base de datos</span>')
+
+        stats_row = (
+            f'<div class="card-stats">{"".join(stats)}</div>'
+            if stats else ""
+        )
+
         return f"""      <div class="card">
         <div class="card-header">
           <span class="card-name">{name}</span>
@@ -346,10 +377,11 @@ def generate_index_page() -> bool:
         </div>
         <div class="card-info">
           <div class="info-row">{_ICON_GLOBE}<span class="value">{domain}</span></div>
-          <div class="info-row">{_ICON_CODE}<span class="fw-badge {fw_cls}">{fw_label}</span></div>
+          <div class="info-row">{_ICON_CODE}<span class="fw-badge {fw_cls}">{fw_label}</span>{branch_html}</div>
           <div class="info-row">{_ICON_FOLDER}<span class="value docroot">{docroot}</span></div>
         </div>
-        <a href="{protocol}://{domain}" target="_blank" class="card-link">Abrir proyecto →</a>
+        {stats_row}
+        <a href="{protocol}://{domain}" target="_blank" class="card-link">Abrir proyecto &#8594;</a>
       </div>"""
 
     cards = "\n".join(_card(p) for p in projects)
@@ -387,18 +419,9 @@ def generate_index_page() -> bool:
       align-items: center;
       gap: 10px;
     }}
-    .header-dot {{
-      width: 10px; height: 10px;
-      border-radius: 50%;
-      background: var(--accent);
-      flex-shrink: 0;
-    }}
+    .header-dot {{ width: 10px; height: 10px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }}
     header h1 {{ font-size: 1.1rem; font-weight: 600; }}
-    .header-count {{
-      margin-left: auto;
-      font-size: 0.82rem;
-      color: var(--text-muted);
-    }}
+    .header-count {{ margin-left: auto; font-size: 0.82rem; color: var(--text-muted); }}
     main {{ padding: 32px; }}
     .grid {{
       display: grid;
@@ -412,30 +435,21 @@ def generate_index_page() -> bool:
       padding: 22px;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 14px;
       transition: border-color 0.2s, transform 0.15s;
     }}
     .card:hover {{ border-color: var(--accent); transform: translateY(-2px); }}
-    .card-header {{
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }}
+    .card-header {{ display: flex; align-items: center; justify-content: space-between; gap: 8px; }}
     .card-name {{ font-size: 1.05rem; font-weight: 600; }}
     .badge {{
       font-size: 0.7rem; font-weight: 600;
       padding: 3px 8px; border-radius: 20px;
-      text-transform: uppercase; letter-spacing: 0.05em;
-      flex-shrink: 0;
+      text-transform: uppercase; letter-spacing: 0.05em; flex-shrink: 0;
     }}
-    .badge-https {{ background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }}
+    .badge-https {{ background: rgba(34,197,94,0.15);  color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }}
     .badge-http  {{ background: rgba(148,163,184,0.1); color: #94a3b8; border: 1px solid rgba(148,163,184,0.2); }}
-    .card-info {{ display: flex; flex-direction: column; gap: 9px; flex: 1; }}
-    .info-row {{
-      display: flex; align-items: center; gap: 8px;
-      font-size: 0.85rem; color: var(--text-muted);
-    }}
+    .card-info {{ display: flex; flex-direction: column; gap: 9px; }}
+    .info-row {{ display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-muted); }}
     .info-row svg {{ flex-shrink: 0; }}
     .value {{ color: var(--text); word-break: break-all; }}
     .docroot {{ font-size: 0.78rem; color: var(--text-muted); }}
@@ -444,10 +458,23 @@ def generate_index_page() -> bool:
       padding: 2px 9px; border-radius: 4px;
       text-transform: uppercase; letter-spacing: 0.04em;
     }}
-    .fw-laravel   {{ background: rgba(255,75,75,0.15);  color: #f87171; border: 1px solid rgba(255,75,75,0.3); }}
-    .fw-symfony   {{ background: rgba(0,210,180,0.12);  color: #2dd4bf; border: 1px solid rgba(0,210,180,0.3); }}
-    .fw-wordpress {{ background: rgba(96,165,250,0.12); color: #60a5fa; border: 1px solid rgba(96,165,250,0.3); }}
-    .fw-php       {{ background: rgba(167,139,250,0.12);color: #a78bfa; border: 1px solid rgba(167,139,250,0.3); }}
+    .fw-laravel   {{ background: rgba(255,75,75,0.15);   color: #f87171; border: 1px solid rgba(255,75,75,0.3); }}
+    .fw-symfony   {{ background: rgba(0,210,180,0.12);   color: #2dd4bf; border: 1px solid rgba(0,210,180,0.3); }}
+    .fw-wordpress {{ background: rgba(96,165,250,0.12);  color: #60a5fa; border: 1px solid rgba(96,165,250,0.3); }}
+    .fw-php       {{ background: rgba(167,139,250,0.12); color: #a78bfa; border: 1px solid rgba(167,139,250,0.3); }}
+    .branch-badge {{
+      display: inline-flex; align-items: center; gap: 4px;
+      margin-left: 8px;
+      font-size: 0.78rem; color: #4ade80;
+    }}
+    .card-stats {{ display: flex; flex-wrap: wrap; gap: 6px; }}
+    .stat {{
+      font-size: 0.75rem; padding: 3px 8px; border-radius: 4px;
+      background: rgba(148,163,184,0.08); color: var(--text-muted);
+      border: 1px solid rgba(148,163,184,0.15);
+    }}
+    .stat-error {{ background: rgba(239,68,68,0.12); color: #f87171; border-color: rgba(239,68,68,0.25); }}
+    .stat-db    {{ background: rgba(59,130,246,0.12); color: #60a5fa; border-color: rgba(59,130,246,0.25); }}
     .card-link {{
       display: block; text-align: center;
       padding: 9px 16px;
@@ -455,6 +482,7 @@ def generate_index_page() -> bool:
       text-decoration: none; border-radius: 8px;
       font-size: 0.875rem; font-weight: 500;
       transition: background 0.15s;
+      margin-top: auto;
     }}
     .card-link:hover {{ background: var(--accent-hover); }}
     footer {{
@@ -480,6 +508,71 @@ def generate_index_page() -> bool:
 </html>
 """
     return _sudo_write_file(str(INDEX_PAGE), html)
+
+
+def _relative_time(timestamp: float) -> str:
+    delta = datetime.now() - datetime.fromtimestamp(timestamp)
+    s = delta.total_seconds()
+    if s < 120:
+        return "hace un momento"
+    if s < 3600:
+        return f"hace {int(s / 60)}m"
+    if s < 86400:
+        return f"hace {int(s / 3600)}h"
+    if s < 604800:
+        return f"hace {int(s / 86400)}d"
+    return datetime.fromtimestamp(timestamp).strftime("%d/%m/%Y")
+
+
+def get_git_branch(project_dir: str) -> str | None:
+    if not project_dir or not Path(project_dir).exists():
+        return None
+    try:
+        r = subprocess.run(
+            ["git", "-C", project_dir, "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, timeout=3
+        )
+        branch = r.stdout.strip()
+        return branch if r.returncode == 0 and branch and branch != "HEAD" else None
+    except Exception:
+        return None
+
+
+def get_project_last_modified(project_dir: str) -> str | None:
+    if not project_dir or not Path(project_dir).exists():
+        return None
+    try:
+        r = subprocess.run(
+            ["git", "-C", project_dir, "log", "-1", "--format=%ct"],
+            capture_output=True, text=True, timeout=3
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            return _relative_time(float(r.stdout.strip()))
+        return _relative_time(Path(project_dir).stat().st_mtime)
+    except Exception:
+        return None
+
+
+def get_project_size(project_dir: str) -> str | None:
+    if not project_dir or not Path(project_dir).exists():
+        return None
+    try:
+        r = subprocess.run(
+            ["du", "-sh", "--exclude=.git", "--exclude=vendor", "--exclude=node_modules", project_dir],
+            capture_output=True, text=True, timeout=10
+        )
+        return r.stdout.split()[0] if r.returncode == 0 else None
+    except Exception:
+        return None
+
+
+def get_recent_error_count(name: str) -> int:
+    error_log = VHOST_ERROR_LOG.format(name=name)
+    try:
+        content = _run_sudo_output(["tail", "-n", "500", error_log]) or ""
+        return sum(1 for line in content.splitlines() if "[error]" in line.lower())
+    except Exception:
+        return 0
 
 
 def detect_framework(docroot: str) -> str:
