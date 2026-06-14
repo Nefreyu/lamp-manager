@@ -316,10 +316,45 @@ def generate_index_page() -> bool:
     if INDEX_PAGE.exists() and not INDEX_BACKUP.exists():
         _run_sudo(["cp", str(INDEX_PAGE), str(INDEX_BACKUP)])
 
-    items = "\n".join(
-        f'        <li><a href="http://{p}.test" target="_blank">{p}.test</a></li>'
-        for p in projects
-    )
+    _FW_LABELS = {
+        "laravel":   ("Laravel",    "fw-laravel"),
+        "symfony":   ("Symfony",    "fw-symfony"),
+        "wordpress": ("WordPress",  "fw-wordpress"),
+        "php":       ("PHP",        "fw-php"),
+    }
+
+    _ICON_GLOBE = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'
+    _ICON_FOLDER = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'
+    _ICON_CODE   = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>'
+
+    def _card(name):
+        docroot  = get_docroot(name)
+        has_https = vhost_has_https(name)
+        fw_id    = detect_framework(docroot)
+        fw_label, fw_cls = _FW_LABELS[fw_id]
+        protocol = "https" if has_https else "http"
+        domain   = f"{name}.test"
+        https_badge = (
+            '<span class="badge badge-https">HTTPS</span>'
+            if has_https else
+            '<span class="badge badge-http">HTTP</span>'
+        )
+        return f"""      <div class="card">
+        <div class="card-header">
+          <span class="card-name">{name}</span>
+          {https_badge}
+        </div>
+        <div class="card-info">
+          <div class="info-row">{_ICON_GLOBE}<span class="value">{domain}</span></div>
+          <div class="info-row">{_ICON_CODE}<span class="fw-badge {fw_cls}">{fw_label}</span></div>
+          <div class="info-row">{_ICON_FOLDER}<span class="value docroot">{docroot}</span></div>
+        </div>
+        <a href="{protocol}://{domain}" target="_blank" class="card-link">Abrir proyecto →</a>
+      </div>"""
+
+    cards = "\n".join(_card(p) for p in projects)
+    count = len(projects)
+    plural = "proyecto activo" if count == 1 else "proyectos activos"
 
     html = f"""<!DOCTYPE html>
 <html lang="es">
@@ -328,44 +363,136 @@ def generate_index_page() -> bool:
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LAMP Manager</title>
   <style>
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    :root {{
+      --bg:           #0f172a;
+      --surface:      #1e293b;
+      --border:       #334155;
+      --text:         #f1f5f9;
+      --text-muted:   #94a3b8;
+      --accent:       #3b82f6;
+      --accent-hover: #2563eb;
+    }}
     body {{
-      font-family: Cantarell, sans-serif;
-      background: #f6f5f4;
-      color: #2e2e2e;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Cantarell, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }}
+    header {{
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 18px 32px;
       display: flex;
-      justify-content: center;
-      padding: 48px 16px;
-      margin: 0;
+      align-items: center;
+      gap: 10px;
+    }}
+    .header-dot {{
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+    }}
+    header h1 {{ font-size: 1.1rem; font-weight: 600; }}
+    .header-count {{
+      margin-left: auto;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }}
+    main {{ padding: 32px; }}
+    .grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
     }}
     .card {{
-      background: white;
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-      padding: 32px 40px;
-      min-width: 320px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      transition: border-color 0.2s, transform 0.15s;
     }}
-    h1 {{ font-size: 1.4rem; margin: 0 0 8px; }}
-    p.subtitle {{ color: #777; font-size: 0.9rem; margin: 0 0 24px; }}
-    ul {{ list-style: none; padding: 0; margin: 0; }}
-    li {{ padding: 10px 0; border-bottom: 1px solid #f0f0f0; }}
-    li:last-child {{ border-bottom: none; }}
-    a {{ color: #1c71d8; text-decoration: none; font-size: 1rem; }}
-    a:hover {{ text-decoration: underline; }}
-    li.empty {{ color: #999; font-style: italic; }}
+    .card:hover {{ border-color: var(--accent); transform: translateY(-2px); }}
+    .card-header {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }}
+    .card-name {{ font-size: 1.05rem; font-weight: 600; }}
+    .badge {{
+      font-size: 0.7rem; font-weight: 600;
+      padding: 3px 8px; border-radius: 20px;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      flex-shrink: 0;
+    }}
+    .badge-https {{ background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }}
+    .badge-http  {{ background: rgba(148,163,184,0.1); color: #94a3b8; border: 1px solid rgba(148,163,184,0.2); }}
+    .card-info {{ display: flex; flex-direction: column; gap: 9px; flex: 1; }}
+    .info-row {{
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.85rem; color: var(--text-muted);
+    }}
+    .info-row svg {{ flex-shrink: 0; }}
+    .value {{ color: var(--text); word-break: break-all; }}
+    .docroot {{ font-size: 0.78rem; color: var(--text-muted); }}
+    .fw-badge {{
+      font-size: 0.72rem; font-weight: 600;
+      padding: 2px 9px; border-radius: 4px;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }}
+    .fw-laravel   {{ background: rgba(255,75,75,0.15);  color: #f87171; border: 1px solid rgba(255,75,75,0.3); }}
+    .fw-symfony   {{ background: rgba(0,210,180,0.12);  color: #2dd4bf; border: 1px solid rgba(0,210,180,0.3); }}
+    .fw-wordpress {{ background: rgba(96,165,250,0.12); color: #60a5fa; border: 1px solid rgba(96,165,250,0.3); }}
+    .fw-php       {{ background: rgba(167,139,250,0.12);color: #a78bfa; border: 1px solid rgba(167,139,250,0.3); }}
+    .card-link {{
+      display: block; text-align: center;
+      padding: 9px 16px;
+      background: var(--accent); color: white;
+      text-decoration: none; border-radius: 8px;
+      font-size: 0.875rem; font-weight: 500;
+      transition: background 0.15s;
+    }}
+    .card-link:hover {{ background: var(--accent-hover); }}
+    footer {{
+      text-align: center; padding: 24px;
+      color: var(--text-muted); font-size: 0.78rem;
+      border-top: 1px solid var(--border);
+    }}
   </style>
 </head>
 <body>
-  <div class="card">
+  <header>
+    <div class="header-dot"></div>
     <h1>LAMP Manager</h1>
-    <p class="subtitle">Proyectos disponibles</p>
-    <ul>
-{items}
-    </ul>
-  </div>
+    <span class="header-count">{count} {plural}</span>
+  </header>
+  <main>
+    <div class="grid">
+{cards}
+    </div>
+  </main>
+  <footer>LAMP Manager &middot; entorno local</footer>
 </body>
 </html>
 """
     return _sudo_write_file(str(INDEX_PAGE), html)
+
+
+def detect_framework(docroot: str) -> str:
+    base = Path(docroot)
+    parent = base.parent
+    for d in (base, parent):
+        if (d / "artisan").exists():
+            return "laravel"
+        if (d / "symfony.lock").exists() or (d / "bin" / "console").exists():
+            return "symfony"
+        if (d / "wp-config.php").exists() or (d / "wp-config-sample.php").exists():
+            return "wordpress"
+    return "php"
 
 
 def get_docroot(name: str) -> str:
