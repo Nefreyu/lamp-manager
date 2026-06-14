@@ -140,7 +140,7 @@ def list_orphan_folders(projects_dir: str) -> list[str]:
         return []
     return sorted(
         d.name for d in base.iterdir()
-        if d.is_dir() and d.name not in existing
+        if d.is_dir() and d.name not in existing and not d.name.startswith(".")
     )
 
 
