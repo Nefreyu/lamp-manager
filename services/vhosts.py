@@ -278,7 +278,9 @@ def enable_https(name: str) -> bool:
     docroot = get_docroot(name)
     if not _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, docroot, https=True)):
         return False
-    return _run_sudo(["systemctl", "reload", "apache2"])
+    ok = _run_sudo(["systemctl", "reload", "apache2"])
+    generate_index_page()
+    return ok
 
 
 def disable_https(name: str) -> bool:
@@ -287,7 +289,9 @@ def disable_https(name: str) -> bool:
     docroot = get_docroot(name)
     if not _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, docroot, https=False)):
         return False
-    return _run_sudo(["systemctl", "reload", "apache2"])
+    ok = _run_sudo(["systemctl", "reload", "apache2"])
+    generate_index_page()
+    return ok
 
 
 def add_hosts_entry(domain: str) -> bool:
@@ -618,7 +622,9 @@ def update_docroot(name: str, new_docroot: str) -> bool:
             lines.append(line)
     if not _sudo_write_file(str(config), "\n".join(lines) + "\n"):
         return False
-    return _run_sudo(["systemctl", "reload", "apache2"])
+    ok = _run_sudo(["systemctl", "reload", "apache2"])
+    generate_index_page()
+    return ok
 
 
 def _detect_docroot(projects_dir: str, name: str) -> str:
