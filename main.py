@@ -24,31 +24,23 @@ if _icon_src.exists():
     _hicolor = Path.home() / ".local/share/icons/hicolor"
     _icons_dst_dir = _hicolor / "scalable/apps"
     _icons_dst_dir.mkdir(parents=True, exist_ok=True)
+    # NO escribir un index.theme propio aquí: el index.theme del sistema
+    # (/usr/share/icons/hicolor) ya declara scalable/apps, así que estos SVG se
+    # encuentran sin él. Un index.theme de usuario con Directories= incompleto
+    # ensombrece al del sistema y rompe la resolución de tamaños de TODOS los
+    # iconos (pixelado en el menú de GNOME).
     _new_icons = False
     for _svg in (_icon_src.parent).glob("*.svg"):
         _dst = _icons_dst_dir / _svg.name
         if not _dst.exists():
             _dst.symlink_to(_svg.resolve())
             _new_icons = True
-    _icon_dst = _icons_dst_dir / "io.github.nefreyu.LampManager.svg"
-    _index = _hicolor / "index.theme"
-    _content = _index.read_text() if _index.exists() else ""
-    if "scalable/apps" not in _content:
-        if "Directories=" in _content:
-            _content = _content.replace(
-                next(l for l in _content.splitlines() if l.startswith("Directories=")),
-                next(l for l in _content.splitlines() if l.startswith("Directories=")) + ",scalable/apps"
-            )
-            _content = _content.rstrip() + "\n\n[scalable/apps]\nSize=48\nType=Scalable\nMinSize=1\nMaxSize=256\n"
-        else:
-            _content = (
-                "[Icon Theme]\nName=Hicolor\nComment=Hicolor icon theme\nDirectories=scalable/apps\n\n"
-                "[scalable/apps]\nSize=48\nType=Scalable\nMinSize=1\nMaxSize=256\n"
-            )
-        _index.write_text(_content)
-        _new_icons = True
     if _new_icons:
-        subprocess.run(["gtk-update-icon-cache", "-f", str(_hicolor)], capture_output=True)
+        # --ignore-theme-index: refresca la caché sin requerir ni crear index.theme
+        subprocess.run(
+            ["gtk-update-icon-cache", "-f", "-t", "--ignore-theme-index", str(_hicolor)],
+            capture_output=True,
+        )
 
 # Instalar .desktop en ~/.local/share/applications/ si se ejecuta desde el directorio de desarrollo
 _desktop_src = Path(__file__).parent / "packaging/io.github.nefreyu.LampManager.desktop"
@@ -137,4 +129,4 @@ class App(Adw.Application):
 
 if __name__ == "__main__":
     app = App()
-    app.run()
+    app.run(sys.argv)
