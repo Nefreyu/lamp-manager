@@ -327,15 +327,62 @@ def generate_index_page() -> bool:
         "php":       ("PHP",       "fw-php"),
     }
 
+    _FW_COLORS = {
+        "laravel":   {"accent": "#f87171", "rgb": "248,113,113", "band1": "#ef4444", "band2": "#b91c1c"},
+        "symfony":   {"accent": "#2dd4bf", "rgb": "45,212,191",  "band1": "#14b8a6", "band2": "#0f766e"},
+        "wordpress": {"accent": "#60a5fa", "rgb": "96,165,250",  "band1": "#3b82f6", "band2": "#1d4ed8"},
+        "php":       {"accent": "#a78bfa", "rgb": "167,139,250", "band1": "#8b5cf6", "band2": "#6d28d9"},
+    }
+
+    _FW_LOGO_PATHS = {
+        "laravel":   '<path d="M23.642 5.43a.364.364 0 01.014.1v5.149c0 .135-.073.26-.189.326l-4.323 2.49v4.934a.378.378 0 01-.188.326L9.93 23.949a.316.316 0 01-.066.027c-.008.002-.016.008-.024.01a.348.348 0 01-.192 0c-.011-.002-.02-.008-.03-.012-.02-.008-.042-.014-.062-.025L.533 18.755a.376.376 0 01-.189-.326V2.974c0-.033.005-.066.014-.098.003-.012.01-.02.014-.032a.369.369 0 01.023-.058c.004-.013.015-.022.023-.033l.033-.045c.012-.01.025-.018.037-.027.014-.012.027-.024.041-.034H.53L5.043.05a.375.375 0 01.375 0L9.93 2.647h.002c.015.01.027.021.04.033l.038.027c.013.014.02.03.033.045.008.011.02.021.025.033.01.02.017.038.024.058.003.011.01.021.013.032.01.031.014.064.014.098v9.652l3.76-2.164V5.527c0-.033.004-.066.013-.098.003-.01.01-.02.013-.032a.487.487 0 01.024-.059c.007-.012.018-.02.025-.033.012-.015.021-.03.033-.043.012-.012.025-.02.037-.028.014-.01.026-.023.041-.032h.001l4.513-2.598a.375.375 0 01.375 0l4.513 2.598c.016.01.027.021.042.031.012.01.025.018.036.028.013.014.022.03.034.044.008.012.019.021.024.033.011.02.018.04.024.06.006.01.012.021.015.032zm-.74 5.032V6.179l-1.578.908-2.182 1.256v4.283zm-4.51 7.75v-4.287l-2.147 1.225-6.126 3.498v4.325zM1.093 3.624v14.588l8.273 4.761v-4.325l-4.322-2.445-.002-.003H5.04c-.014-.01-.025-.021-.04-.031-.011-.01-.024-.018-.035-.027l-.001-.002c-.013-.012-.021-.025-.031-.04-.01-.011-.021-.022-.028-.036h-.002c-.008-.014-.013-.031-.02-.047-.006-.016-.014-.027-.018-.043a.49.49 0 01-.008-.057c-.002-.014-.006-.027-.006-.041V5.789l-2.18-1.257zM5.23.81L1.47 2.974l3.76 2.164 3.758-2.164zm1.956 13.505l2.182-1.256V3.624l-1.58.91-2.182 1.255v9.435zm11.581-10.95l-3.76 2.163 3.76 2.163 3.759-2.164zm-.376 4.978L16.21 7.087 14.63 6.18v4.283l2.182 1.256 1.58.908zm-8.65 9.654l5.514-3.148 2.756-1.572-3.757-2.163-4.323 2.489-3.941 2.27z"/>',
+        "symfony":   '<path d="M24 12c0 6.628-5.372 12-12 12S0 18.628 0 12 5.372 0 12 0s12 5.372 12 12zm-6.753-7.561c-1.22.042-2.283.715-3.075 1.644-.878 1.02-1.461 2.229-1.881 3.461-.753-.614-1.332-1.414-2.539-1.761-.966-.297-2.015-.105-2.813.514-.41.319-.71.757-.861 1.254-.36 1.176.381 2.225.719 2.6l.737.79c.15.154.519.56.339 1.138-.193.631-.951 1.037-1.732.799-.348-.106-.848-.366-.734-.73.045-.15.152-.263.21-.391.052-.11.077-.194.095-.242.141-.465-.053-1.07-.551-1.223-.465-.143-.939-.03-1.125.566-.209.68.117 1.913 1.86 2.449 2.04.628 3.765-.484 4.009-1.932.153-.907-.255-1.582-1.006-2.447l-.612-.677c-.371-.37-.497-1.002-.114-1.485.324-.409.785-.584 1.539-.379 1.103.3 1.594 1.063 2.412 1.68-.338 1.11-.56 2.223-.759 3.222l-.123.746c-.585 3.07-1.033 4.757-2.194 5.726-.234.166-.57.416-1.073.434-.266.005-.352-.176-.355-.257-.006-.184.15-.271.255-.353.154-.083.39-.224.372-.674-.016-.532-.456-.994-1.094-.973-.477.017-1.203.465-1.176 1.286.028.85.819 1.485 2.012 1.444.638-.021 2.062-.281 3.464-1.949 1.633-1.911 2.09-4.101 2.434-5.706l.383-2.116c.213.024.441.042.69.048 2.032.044 3.049-1.01 3.064-1.776.01-.464-.304-.921-.744-.91-.386.009-.718.278-.806.654-.094.428.646.813.068 1.189-.41.266-1.146.452-2.184.3l.188-1.042c.386-1.976.859-4.407 2.661-4.467.132-.007.612.006.623.323.003.105-.022.134-.147.375-.115.155-.174.345-.168.537.017.504.4.836.957.816.743-.023.955-.748.945-1.119-.032-.874-.952-1.424-2.17-1.386z"/>',
+        "wordpress": '<path d="M21.469 6.825c.84 1.537 1.318 3.3 1.318 5.175 0 3.979-2.156 7.456-5.363 9.325l3.295-9.527c.615-1.54.82-2.771.82-3.864 0-.405-.026-.78-.07-1.11m-7.981.105c.647-.03 1.232-.105 1.232-.105.582-.075.514-.93-.067-.899 0 0-1.755.135-2.88.135-1.064 0-2.85-.15-2.85-.15-.585-.03-.661.855-.075.885 0 0 .54.061 1.125.09l1.68 4.605-2.37 7.08L5.354 6.9c.649-.03 1.234-.1 1.234-.1.585-.075.516-.93-.065-.896 0 0-1.746.138-2.874.138-.2 0-.438-.008-.69-.015C4.911 3.15 8.235 1.215 12 1.215c2.809 0 5.365 1.072 7.286 2.833-.046-.003-.091-.009-.141-.009-1.06 0-1.812.923-1.812 1.914 0 .89.513 1.643 1.06 2.531.411.72.89 1.643.89 2.977 0 .915-.354 1.994-.821 3.479l-1.075 3.585-3.9-11.61.001.014zM12 22.784c-1.059 0-2.081-.153-3.048-.437l3.237-9.406 3.315 9.087c.024.053.05.101.078.149-1.12.393-2.325.609-3.582.609M1.211 12c0-1.564.336-3.05.935-4.39L7.29 21.709C3.694 19.96 1.212 16.271 1.211 12M12 0C5.385 0 0 5.385 0 12s5.385 12 12 12 12-5.385 12-12S18.615 0 12 0"/>',
+        "php":       '<path d="M7.01 10.207h-.944l-.515 2.648h.838c.556 0 .97-.105 1.242-.314.272-.21.455-.559.55-1.049.092-.47.05-.802-.124-.995-.175-.193-.523-.29-1.047-.29zM12 5.688C5.373 5.688 0 8.514 0 12s5.373 6.313 12 6.313S24 15.486 24 12c0-3.486-5.373-6.312-12-6.312zm-3.26 7.451c-.261.25-.575.438-.917.551-.336.108-.765.164-1.285.164H5.357l-.327 1.681H3.652l1.23-6.326h2.65c.797 0 1.378.209 1.744.628.366.418.476 1.002.33 1.752a2.836 2.836 0 0 1-.305.847c-.143.255-.33.49-.561.703zm4.024.715l.543-2.799c.063-.318.039-.536-.068-.651-.107-.116-.336-.174-.687-.174H11.46l-.704 3.625H9.388l1.23-6.327h1.367l-.327 1.682h1.218c.767 0 1.295.134 1.586.401s.378.7.263 1.299l-.572 2.944h-1.389zm7.597-2.265a2.782 2.782 0 0 1-.305.847c-.143.255-.33.49-.561.703a2.44 2.44 0 0 1-.917.551c-.336.108-.765.164-1.286.164h-1.18l-.327 1.682h-1.378l1.23-6.326h2.649c.797 0 1.378.209 1.744.628.366.417.477 1.001.331 1.751zM17.766 10.207h-.943l-.516 2.648h.838c.557 0 .971-.105 1.242-.314.272-.21.455-.559.551-1.049.092-.47.049-.802-.125-.995s-.524-.29-1.047-.29z"/>',
+    }
+
     _ICON_GLOBE  = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'
     _ICON_FOLDER = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'
     _ICON_CODE   = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>'
 
-    def _card(name):
+    _TOOL_ICONS = {
+        "phpmyadmin": '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>',
+        "mailpit":    '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>',
+    }
+
+    def _tools_html():
+        from services.systemd import SERVICES, is_installed, get_status
+        items = []
+        for svc in SERVICES:
+            icon = _TOOL_ICONS.get(svc["id"])
+            if icon is None or not svc.get("url") or not is_installed(svc):
+                continue
+            active = get_status("apache2") if svc.get("web_only") else get_status(svc["id"])
+            dot_cls = "tool-dot-on" if active else "tool-dot-off"
+            state = "activo" if active else "detenido"
+            items.append(
+                f'      <a href="{svc["url"]}" target="_blank" class="tool" title="{state}">'
+                f'{icon}<span class="tool-label">{svc["label"]}</span>'
+                f'<span class="tool-dot {dot_cls}"></span></a>'
+            )
+        if not items:
+            return ""
+        return (
+            '    <section class="tools">\n'
+            '      <h2 class="tools-title">Herramientas</h2>\n'
+            '      <div class="tools-row">\n'
+            + "\n".join(items)
+            + "\n      </div>\n"
+            "    </section>\n"
+        )
+
+    def _card(name, i=0):
         docroot     = get_docroot(name)
         has_https   = vhost_has_https(name)
         fw_id       = detect_framework(docroot)
         fw_label, fw_cls = _FW_LABELS[fw_id]
+        c           = _FW_COLORS[fw_id]
+        logo        = f'<svg class="fw-logo" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" xmlns="http://www.w3.org/2000/svg">{_FW_LOGO_PATHS[fw_id]}</svg>'
         protocol    = "https" if has_https else "http"
         domain      = f"{name}.test"
         project_dir = str(_project_dir_from_docroot(docroot)) if docroot else ""
@@ -347,9 +394,9 @@ def generate_index_page() -> bool:
         has_db   = database_exists(name)
 
         https_badge = (
-            '<span class="badge badge-https">HTTPS</span>'
+            '<span class="band-badge band-badge-on">HTTPS</span>'
             if has_https else
-            '<span class="badge badge-http">HTTP</span>'
+            '<span class="band-badge">HTTP</span>'
         )
         branch_html = (
             f'<span class="branch-badge">'
@@ -374,21 +421,25 @@ def generate_index_page() -> bool:
             if stats else ""
         )
 
-        return f"""      <div class="card">
-        <div class="card-header">
+        return f"""      <div class="card" style="--fw:{c['accent']}; --fw-glow:rgba({c['rgb']},0.30); --band1:{c['band1']}; --band2:{c['band2']}; animation-delay:{i * 50}ms">
+        <div class="card-band">
+          {logo}
           <span class="card-name">{name}</span>
           {https_badge}
         </div>
-        <div class="card-info">
-          <div class="info-row">{_ICON_GLOBE}<span class="value">{domain}</span></div>
-          <div class="info-row">{_ICON_CODE}<span class="fw-badge {fw_cls}">{fw_label}</span>{branch_html}</div>
-          <div class="info-row">{_ICON_FOLDER}<span class="value docroot">{docroot}</span></div>
+        <div class="card-body">
+          <div class="card-info">
+            <div class="info-row">{_ICON_GLOBE}<span class="value">{domain}</span></div>
+            <div class="info-row">{_ICON_CODE}<span class="fw-badge {fw_cls}">{fw_label}</span>{branch_html}</div>
+            <div class="info-row">{_ICON_FOLDER}<span class="value docroot">{docroot}</span></div>
+          </div>
+          {stats_row}
+          <a href="{protocol}://{domain}" target="_blank" class="card-link">Abrir proyecto <span class="arrow">&#8594;</span></a>
         </div>
-        {stats_row}
-        <a href="{protocol}://{domain}" target="_blank" class="card-link">Abrir proyecto &#8594;</a>
       </div>"""
 
-    cards = "\n".join(_card(p) for p in projects)
+    cards = "\n".join(_card(p, i) for i, p in enumerate(projects))
+    tools_section = _tools_html()
     count = len(projects)
     plural = "proyecto activo" if count == 1 else "proyectos activos"
 
@@ -411,47 +462,112 @@ def generate_index_page() -> bool:
     }}
     body {{
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Cantarell, sans-serif;
-      background: var(--bg);
+      background:
+        radial-gradient(1100px 520px at 50% -8%, #1b2742 0%, rgba(27,39,66,0) 60%),
+        var(--bg);
+      background-attachment: fixed;
       color: var(--text);
       min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
     }}
     header {{
-      background: var(--surface);
+      position: relative;
+      background: linear-gradient(135deg, #1f2b44 0%, #131c30 100%);
       border-bottom: 1px solid var(--border);
-      padding: 18px 32px;
+      padding: 20px 32px;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 14px;
     }}
-    .header-dot {{ width: 10px; height: 10px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }}
-    header h1 {{ font-size: 1.1rem; font-weight: 600; }}
-    .header-count {{ margin-left: auto; font-size: 0.82rem; color: var(--text-muted); }}
-    main {{ padding: 32px; }}
+    header::after {{
+      content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+      background: linear-gradient(90deg, var(--accent), #6366f1 35%, transparent 80%);
+    }}
+    .logo {{
+      width: 40px; height: 40px; border-radius: 11px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #3b82f6, #6366f1);
+      box-shadow: 0 6px 16px -5px rgba(59,130,246,0.65);
+    }}
+    .logo svg {{ color: #fff; }}
+    .brand-text {{ display: flex; flex-direction: column; gap: 1px; }}
+    header h1 {{ font-size: 1.15rem; font-weight: 700; letter-spacing: -0.01em; }}
+    .brand-sub {{ font-size: 0.74rem; color: var(--text-muted); }}
+    .header-count {{
+      margin-left: auto; font-size: 0.8rem; color: var(--text-muted);
+      padding: 6px 14px; border: 1px solid var(--border); border-radius: 20px;
+      background: rgba(148,163,184,0.06);
+    }}
+    main {{ padding: 32px; max-width: 1500px; margin: 0 auto; }}
+    @keyframes cardIn {{
+      from {{ opacity: 0; transform: translateY(10px); }}
+      to   {{ opacity: 1; transform: none; }}
+    }}
+    .tools {{ margin-bottom: 32px; }}
+    .tools-title {{
+      font-size: 0.78rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text-muted); margin-bottom: 12px;
+    }}
+    .tools-row {{ display: flex; flex-wrap: wrap; gap: 12px; }}
+    .tool {{
+      display: inline-flex; align-items: center; gap: 9px;
+      padding: 10px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text); text-decoration: none;
+      font-size: 0.875rem; font-weight: 500;
+      transition: border-color 0.2s, transform 0.15s;
+    }}
+    .tool:hover {{ border-color: var(--accent); transform: translateY(-2px); }}
+    .tool svg {{ color: var(--text-muted); flex-shrink: 0; }}
+    .tool:hover svg {{ color: var(--accent); }}
+    .tool-dot {{ width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }}
+    .tool-dot-on  {{ background: #4ade80; box-shadow: 0 0 0 3px rgba(74,222,128,0.15); }}
+    .tool-dot-off {{ background: #64748b; }}
     .grid {{
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
       gap: 20px;
     }}
     .card {{
+      position: relative;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 22px;
+      border-radius: 14px;
       display: flex;
       flex-direction: column;
-      gap: 14px;
-      transition: border-color 0.2s, transform 0.15s;
+      overflow: hidden;
+      animation: cardIn 0.45s ease both;
+      transition: border-color 0.2s, transform 0.18s, box-shadow 0.25s;
     }}
-    .card:hover {{ border-color: var(--accent); transform: translateY(-2px); }}
-    .card-header {{ display: flex; align-items: center; justify-content: space-between; gap: 8px; }}
-    .card-name {{ font-size: 1.05rem; font-weight: 600; }}
-    .badge {{
-      font-size: 0.7rem; font-weight: 600;
-      padding: 3px 8px; border-radius: 20px;
-      text-transform: uppercase; letter-spacing: 0.05em; flex-shrink: 0;
+    .card:hover {{
+      transform: translateY(-3px);
+      border-color: var(--fw, var(--accent));
+      box-shadow: 0 16px 34px -16px var(--fw-glow, rgba(59,130,246,0.3));
     }}
-    .badge-https {{ background: rgba(34,197,94,0.15);  color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }}
-    .badge-http  {{ background: rgba(148,163,184,0.1); color: #94a3b8; border: 1px solid rgba(148,163,184,0.2); }}
+    .card-band {{
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 18px;
+      background: linear-gradient(135deg, var(--band1), var(--band2));
+      color: #fff;
+    }}
+    .card-band .fw-logo {{ flex-shrink: 0; opacity: 0.95; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25)); }}
+    .card-name {{ font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; color: #fff; }}
+    .band-badge {{
+      margin-left: auto; flex-shrink: 0;
+      font-size: 0.66rem; font-weight: 700;
+      padding: 3px 9px; border-radius: 20px;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      background: rgba(255,255,255,0.18); color: #fff;
+      border: 1px solid rgba(255,255,255,0.35);
+    }}
+    .band-badge-on {{ background: rgba(255,255,255,0.92); color: #0f172a; border-color: transparent; }}
+    .card-body {{
+      display: flex; flex-direction: column; gap: 14px;
+      padding: 18px;
+    }}
     .card-info {{ display: flex; flex-direction: column; gap: 9px; }}
     .info-row {{ display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-muted); }}
     .info-row svg {{ flex-shrink: 0; }}
@@ -480,30 +596,38 @@ def generate_index_page() -> bool:
     .stat-error {{ background: rgba(239,68,68,0.12); color: #f87171; border-color: rgba(239,68,68,0.25); }}
     .stat-db    {{ background: rgba(59,130,246,0.12); color: #60a5fa; border-color: rgba(59,130,246,0.25); }}
     .card-link {{
-      display: block; text-align: center;
-      padding: 9px 16px;
-      background: var(--accent); color: white;
-      text-decoration: none; border-radius: 8px;
-      font-size: 0.875rem; font-weight: 500;
-      transition: background 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+      padding: 10px 16px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+      color: white;
+      text-decoration: none; border-radius: 9px;
+      font-size: 0.875rem; font-weight: 600;
+      box-shadow: 0 6px 16px -8px rgba(59,130,246,0.7);
+      transition: filter 0.15s, box-shadow 0.2s;
       margin-top: auto;
     }}
-    .card-link:hover {{ background: var(--accent-hover); }}
+    .card-link:hover {{ filter: brightness(1.08); box-shadow: 0 8px 20px -8px rgba(59,130,246,0.85); }}
+    .card-link .arrow {{ transition: transform 0.18s; }}
+    .card-link:hover .arrow {{ transform: translateX(4px); }}
     footer {{
-      text-align: center; padding: 24px;
+      text-align: center; padding: 28px;
       color: var(--text-muted); font-size: 0.78rem;
       border-top: 1px solid var(--border);
+      margin-top: 20px;
     }}
   </style>
 </head>
 <body>
   <header>
-    <div class="header-dot"></div>
-    <h1>LAMP Manager</h1>
+    <span class="logo"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
+    <div class="brand-text">
+      <h1>LAMP Manager</h1>
+      <span class="brand-sub">Entorno de desarrollo local</span>
+    </div>
     <span class="header-count">{count} {plural}</span>
   </header>
   <main>
-    <div class="grid">
+{tools_section}    <div class="grid">
 {cards}
     </div>
   </main>
