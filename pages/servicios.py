@@ -12,9 +12,10 @@ from services.systemd import (
     install_mailpit_service, uninstall_mailpit_service,
     get_service_ports,
 )
-from services.apache import get_version as get_apache_version
+from services.apache import get_version as get_apache_version, configtest as apache_configtest
 from services.mysql import get_version as get_mysql_version
 from services.php import get_version as get_php_version
+from services.nginx import get_version as get_nginx_version, configtest as nginx_configtest
 from services.recommendations import get_missing as get_missing_recommendations
 from config import settings
 from services.vhosts import APACHE_SITES_ENABLED
@@ -23,9 +24,15 @@ _fpm_service = next((s for s in SERVICES if s["id"].endswith("-fpm")), None)
 _VERSION_FNS = {
     "apache2": get_apache_version,
     "mysql": get_mysql_version,
+    "nginx": get_nginx_version,
 }
 if _fpm_service:
     _VERSION_FNS[_fpm_service["id"]] = get_php_version
+
+_CONFIGTEST_FNS = {
+    "apache2": apache_configtest,
+    "nginx": nginx_configtest,
+}
 
 
 class RecommendationsPanel(Gtk.Box):
@@ -191,9 +198,9 @@ class ServiceRow(Gtk.Box):
         GLib.timeout_add(50, self._do_reload)
 
     def _do_reload(self):
-        if self.service_id == "apache2":
-            from services.apache import configtest
-            ok, msg = configtest()
+        configtest_fn = _CONFIGTEST_FNS.get(self.service_id)
+        if configtest_fn:
+            ok, msg = configtest_fn()
             if not ok:
                 self.status_label.set_markup(f"<span color='red' size='small'>Error de configuración: {GLib.markup_escape_text(msg)}</span>")
                 self.set_sensitive(True)

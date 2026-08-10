@@ -11,6 +11,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 from services.systemd import _run_sudo, _sudo_write_file, _run_sudo_output, _run_sudo_feed
+import services.nginx as nginx
 
 log = logging.getLogger(__name__)
 
@@ -279,6 +280,8 @@ def enable_https(name: str) -> bool:
     if not _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, docroot, https=True)):
         return False
     ok = _run_sudo(["systemctl", "reload", "apache2"])
+    nginx.write_vhost_config(name, docroot, https=True)
+    nginx.reload()
     generate_index_page()
     return ok
 
@@ -290,6 +293,8 @@ def disable_https(name: str) -> bool:
     if not _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, docroot, https=False)):
         return False
     ok = _run_sudo(["systemctl", "reload", "apache2"])
+    nginx.write_vhost_config(name, docroot, https=False)
+    nginx.reload()
     generate_index_page()
     return ok
 
@@ -387,6 +392,14 @@ def generate_index_page() -> bool:
         domain      = f"{name}.test"
         project_dir = str(_project_dir_from_docroot(docroot)) if docroot else ""
 
+        nginx_installed = Path("/usr/sbin/nginx").exists()
+        nginx_port       = nginx.HTTPS_PORT if has_https else nginx.HTTP_PORT
+        nginx_link = (
+            f'<a href="{protocol}://{domain}:{nginx_port}" target="_blank" class="card-link card-link-secondary">'
+            f'Nginx :{nginx_port} <span class="arrow">&#8594;</span></a>'
+            if nginx_installed else ""
+        )
+
         branch   = get_git_branch(project_dir)
         size     = get_project_size(project_dir)
         last_mod = get_project_last_modified(project_dir)
@@ -435,6 +448,7 @@ def generate_index_page() -> bool:
           </div>
           {stats_row}
           <a href="{protocol}://{domain}" target="_blank" class="card-link">Abrir proyecto <span class="arrow">&#8594;</span></a>
+          {nginx_link}
         </div>
       </div>"""
 
@@ -609,6 +623,13 @@ def generate_index_page() -> bool:
     .card-link:hover {{ filter: brightness(1.08); box-shadow: 0 8px 20px -8px rgba(59,130,246,0.85); }}
     .card-link .arrow {{ transition: transform 0.18s; }}
     .card-link:hover .arrow {{ transform: translateX(4px); }}
+    .card-link-secondary {{
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      box-shadow: none;
+    }}
+    .card-link-secondary:hover {{ filter: none; border-color: var(--accent); color: var(--text); box-shadow: none; }}
     footer {{
       text-align: center; padding: 28px;
       color: var(--text-muted); font-size: 0.78rem;
@@ -747,6 +768,8 @@ def update_docroot(name: str, new_docroot: str) -> bool:
     if not _sudo_write_file(str(config), "\n".join(lines) + "\n"):
         return False
     ok = _run_sudo(["systemctl", "reload", "apache2"])
+    nginx.write_vhost_config(name, new_docroot, https=vhost_has_https(name))
+    nginx.reload()
     generate_index_page()
     return ok
 
@@ -761,6 +784,8 @@ def create_vhost(name: str, projects_dir: str) -> bool:
     docroot = _detect_docroot(projects_dir, name)
     if not _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, docroot)):
         return False
+    nginx.ensure_default_site()
+    nginx.write_vhost_config(name, docroot)
     base_dir = Path(projects_dir)
     if base_dir.exists() and not os.access(base_dir, os.W_OK):
         user = getpass.getuser()
@@ -778,6 +803,8 @@ def create_vhost(name: str, projects_dir: str) -> bool:
     if not _run_sudo(["a2ensite", f"{name}.test.conf"]):
         return False
     _run_sudo(["systemctl", "reload", "apache2"])
+    nginx.enable_site(f"{name}.test.conf")
+    nginx.reload()
     create_database(name)
     generate_index_page()
     return True
@@ -806,6 +833,9 @@ def delete_vhost(name: str, projects_dir: str) -> bool:
     _run_sudo(["rm", "-f", str(vhost_config_path(name))])
     remove_hosts_entry(f"{name}.test")
     _run_sudo(["systemctl", "reload", "apache2"])
+    nginx.disable_site(f"{name}.test.conf")
+    nginx.remove_vhost_config(name)
+    nginx.reload()
     project_dir = Path(projects_dir) / name
     if project_dir.exists():
         _run_sudo(["rm", "-rf", str(project_dir)])
@@ -821,6 +851,12 @@ def enable_vhost(name: str) -> bool:
         return False
     if not _run_sudo(["systemctl", "reload", "apache2"]):
         return False
+    # Reescribe la config de Nginx (no solo la re-habilita): un vhost creado
+    # antes de que existiera esta función nunca tuvo sites-available de Nginx,
+    # y symlinkar un archivo inexistente rompe nginx -t para todos los vhosts.
+    nginx.write_vhost_config(name, get_docroot(name), https=vhost_has_https(name))
+    nginx.enable_site(f"{name}.test.conf")
+    nginx.reload()
     generate_index_page()
     return True
 
@@ -831,8 +867,33 @@ def disable_vhost(name: str) -> bool:
     remove_hosts_entry(f"{name}.test")
     if not _run_sudo(["systemctl", "reload", "apache2"]):
         return False
+    nginx.disable_site(f"{name}.test.conf")
+    nginx.reload()
     generate_index_page()
     return True
+
+
+def sync_nginx() -> bool:
+    """Sincroniza la config de Nginx con el estado actual de los vhosts de Apache.
+
+    Se ejecuta al arrancar la app para que los proyectos creados antes de que
+    existiera esta función queden disponibles en Nginx sin esperar a que el
+    usuario los toque.
+    """
+    nginx.ensure_default_site()
+    ok = True
+    for name in list_projects():
+        if not vhost_is_enabled(name):
+            continue
+        docroot = get_docroot(name)
+        https = vhost_has_https(name)
+        if not nginx.write_vhost_config(name, docroot, https=https):
+            ok = False
+        if not nginx.enable_site(f"{name}.test.conf"):
+            ok = False
+    nginx.reload()
+    generate_index_page()
+    return ok
 
 
 def _project_dir_from_docroot(docroot: str) -> Path | None:
@@ -861,10 +922,18 @@ def trash_vhost(name: str) -> bool:
     if config_content:
         (item_dir / "vhost.conf").write_text(config_content)
 
+    nginx_config_content = _run_sudo_output(["cat", str(nginx.vhost_config_path(name))])
+    if nginx_config_content:
+        (item_dir / "vhost-nginx.conf").write_text(nginx_config_content)
+
     _run_sudo(["a2dissite", f"{name}.test.conf"])
     remove_hosts_entry(f"{name}.test")
     _run_sudo(["systemctl", "reload", "apache2"])
     _run_sudo(["rm", "-f", str(vhost_config_path(name))])
+
+    nginx.disable_site(f"{name}.test.conf")
+    nginx.remove_vhost_config(name)
+    nginx.reload()
 
     if database_exists(name) and is_command_installed("mysqldump"):
         dump = _run_sudo_output(["mysqldump", "--databases", name, "--default-character-set=utf8mb4"])
@@ -887,10 +956,12 @@ def trash_vhost(name: str) -> bool:
         _run_sudo(["mv", str(project_dir), str(item_dir / "files")])
 
     logs_bak = item_dir / "logs"
-    for log_path in (VHOST_ERROR_LOG.format(name=name), VHOST_ACCESS_LOG.format(name=name)):
+    apache_logs = (VHOST_ERROR_LOG.format(name=name), VHOST_ACCESS_LOG.format(name=name))
+    nginx_logs = (nginx.VHOST_ERROR_LOG.format(name=name), nginx.VHOST_ACCESS_LOG.format(name=name))
+    for prefix, log_path in [("apache", p) for p in apache_logs] + [("nginx", p) for p in nginx_logs]:
         if Path(log_path).exists():
             logs_bak.mkdir(exist_ok=True)
-            _run_sudo(["mv", log_path, str(logs_bak / Path(log_path).name)])
+            _run_sudo(["mv", log_path, str(logs_bak / f"{prefix}-{Path(log_path).name}")])
 
     (item_dir / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False))
     generate_index_page()
@@ -942,9 +1013,17 @@ def restore_vhost(trash_id: str) -> bool:
     else:
         _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, str(project_dir)))
 
+    nginx_conf_backup = item_dir / "vhost-nginx.conf"
+    if nginx_conf_backup.exists():
+        _sudo_write_file(str(nginx.vhost_config_path(name)), nginx_conf_backup.read_text())
+    else:
+        nginx.write_vhost_config(name, str(project_dir))
+
     add_hosts_entry(f"{name}.test")
     _run_sudo(["a2ensite", f"{name}.test.conf"])
     _run_sudo(["systemctl", "reload", "apache2"])
+    nginx.enable_site(f"{name}.test.conf")
+    nginx.reload()
 
     if project_dir.exists():
         user = getpass.getuser()

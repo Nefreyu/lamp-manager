@@ -107,6 +107,9 @@ class App(Adw.Application):
         stored = get_sudo_password()
         if stored and validate_password(stored):
             set_password(stored)
+            import threading
+            from services.vhosts import sync_nginx
+            threading.Thread(target=sync_nginx, daemon=True).start()
             self._setup_tray(window_visible=False)
         else:
             self._window.present()

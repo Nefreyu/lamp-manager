@@ -30,6 +30,7 @@ _PHP_ENTRY = _detect_php_entry()
 
 SERVICES = [
     {"id": "apache2",    "label": "Apache",    "optional": False, "binary": "/usr/sbin/apache2",             "url": "http://localhost", "reloadable": True, "process": "apache2"},
+    {"id": "nginx",      "label": "Nginx",     "optional": False, "binary": "/usr/sbin/nginx",                "url": "http://localhost:8080", "reloadable": True, "process": "nginx"},
     {"id": "mysql",      "label": "MySQL",     "optional": False, "binary": "/usr/sbin/mysqld",                                                               "restartable": True, "process": "mysqld"},
     _PHP_ENTRY,
     {"id": "phpmyadmin", "label": "phpMyAdmin","optional": False, "binary": "/usr/share/phpmyadmin/index.php","url": "http://localhost/phpmyadmin", "web_only": True},

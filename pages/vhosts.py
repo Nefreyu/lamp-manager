@@ -5,6 +5,7 @@ from gi.repository import Gtk, Gio, GLib, Gdk
 
 from config import settings
 import threading
+from pathlib import Path
 from services.vhosts import (
     list_projects, list_orphan_folders, vhost_config_path, vhost_is_enabled,
     create_vhost, enable_vhost, disable_vhost,
@@ -12,6 +13,11 @@ from services.vhosts import (
     FRAMEWORKS, is_command_installed, scaffold_project,
     trash_vhost, slugify,
 )
+from services.nginx import HTTP_PORT as NGINX_HTTP_PORT, HTTPS_PORT as NGINX_HTTPS_PORT
+
+
+def _nginx_installed() -> bool:
+    return Path("/usr/sbin/nginx").exists()
 
 
 class VHostRow(Gtk.Box):
@@ -43,6 +49,15 @@ class VHostRow(Gtk.Box):
         self.link_button.set_valign(Gtk.Align.CENTER)
         self.link_button.connect("clicked", self.on_open_url)
         self.append(self.link_button)
+
+        self.nginx_link_button = None
+        if _nginx_installed():
+            self.nginx_link_button = Gtk.Button()
+            self.nginx_link_button.set_icon_name("web-browser-symbolic")
+            self.nginx_link_button.add_css_class("flat")
+            self.nginx_link_button.set_valign(Gtk.Align.CENTER)
+            self.nginx_link_button.connect("clicked", self.on_open_nginx_url)
+            self.append(self.nginx_link_button)
 
         folder_btn = Gtk.Button()
         folder_btn.set_icon_name("folder-symbolic")
@@ -83,6 +98,11 @@ class VHostRow(Gtk.Box):
         self.link_button.set_tooltip_text(
             f"https://{self.name}.test" if has_https else f"http://{self.name}.test"
         )
+        if self.nginx_link_button:
+            port = NGINX_HTTPS_PORT if has_https else NGINX_HTTP_PORT
+            protocol = "https" if has_https else "http"
+            self.nginx_link_button.set_sensitive(enabled)
+            self.nginx_link_button.set_tooltip_text(f"{protocol}://{self.name}.test:{port} (Nginx)")
         self.https_button.set_icon_name(
             "changes-prevent-symbolic" if has_https else "changes-allow-symbolic"
         )
@@ -98,6 +118,12 @@ class VHostRow(Gtk.Box):
     def on_open_url(self, button):
         protocol = "https" if vhost_has_https(self.name) else "http"
         Gio.AppInfo.launch_default_for_uri(f"{protocol}://{self.name}.test", None)
+
+    def on_open_nginx_url(self, button):
+        has_https = vhost_has_https(self.name)
+        protocol = "https" if has_https else "http"
+        port = NGINX_HTTPS_PORT if has_https else NGINX_HTTP_PORT
+        Gio.AppInfo.launch_default_for_uri(f"{protocol}://{self.name}.test:{port}", None)
 
     def on_open_folder(self, button):
         projects_dir = settings.get("general", "projects_dir")
