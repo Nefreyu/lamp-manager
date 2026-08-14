@@ -3,11 +3,58 @@ import shlex
 import subprocess
 from pathlib import Path
 import services.systemd as _systemd
-from services.systemd import _run_sudo
+from services.systemd import _run_sudo, _sudo_write_file
+from config import settings
 
 MODS_AVAILABLE = Path("/etc/apache2/mods-available")
 MODS_ENABLED = Path("/etc/apache2/mods-enabled")
 APACHE_ENVVARS = "/etc/apache2/envvars"
+PORTS_CONF = Path("/etc/apache2/ports.conf")
+DEFAULT_SITE_CONF = Path("/etc/apache2/sites-available/000-default.conf")
+
+
+def get_http_port() -> int:
+    return int(settings.get("apache", "http_port"))
+
+
+def get_https_port() -> int:
+    return int(settings.get("apache", "https_port"))
+
+
+def _ports_conf() -> str:
+    return f"""# If you just change the port or add more ports here, you will likely also
+# have to change the VirtualHost statement in
+# /etc/apache2/sites-enabled/000-default.conf
+
+Listen {get_http_port()}
+
+<IfModule ssl_module>
+	Listen {get_https_port()}
+</IfModule>
+
+<IfModule mod_gnutls.c>
+	Listen {get_https_port()}
+</IfModule>
+"""
+
+
+def write_ports_conf() -> bool:
+    """Apache no escucha en un puerto solo porque un VirtualHost lo referencie:
+    hace falta un Listen explícito en ports.conf."""
+    return _sudo_write_file(str(PORTS_CONF), _ports_conf())
+
+
+def sync_default_site_port() -> bool:
+    """El vhost por defecto de fábrica (000-default.conf) sirve el dashboard de
+    lamp-manager desde /var/www/html — hay que moverlo al puerto HTTP configurado
+    o se queda huérfano en el 80 cuando Apache deja de escuchar ahí."""
+    if not DEFAULT_SITE_CONF.exists():
+        return True
+    content = DEFAULT_SITE_CONF.read_text()
+    new_content = re.sub(r"<VirtualHost \*:\d+>", f"<VirtualHost *:{get_http_port()}>", content, count=1)
+    if new_content == content:
+        return True
+    return _sudo_write_file(str(DEFAULT_SITE_CONF), new_content)
 
 
 def get_version() -> str | None:

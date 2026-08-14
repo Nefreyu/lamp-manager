@@ -4,6 +4,7 @@ from pathlib import Path
 import services.systemd as _systemd
 from services.systemd import _run_sudo, _sudo_write_file
 from services.php import get_installed_version
+from config import settings
 
 SITES_AVAILABLE = Path("/etc/nginx/sites-available")
 SITES_ENABLED = Path("/etc/nginx/sites-enabled")
@@ -15,14 +16,19 @@ VHOST_ACCESS_LOG = "/var/log/nginx/{name}.test-access.log"
 
 CERTS_DIR = Path.home() / ".local/share/lamp-manager/certs"
 
-HTTP_PORT = 8080
-HTTPS_PORT = 8443
-
 DEFAULT_SITE_NAME = "000-default-lamp"
 SNAKEOIL_CERT = "/etc/ssl/certs/ssl-cert-snakeoil.pem"
 SNAKEOIL_KEY = "/etc/ssl/private/ssl-cert-snakeoil.key"
 
 _PHP_VERSIONS = ["8.5", "8.4", "8.3", "8.2", "8.1", "8.0"]
+
+
+def get_http_port() -> int:
+    return int(settings.get("nginx", "http_port"))
+
+
+def get_https_port() -> int:
+    return int(settings.get("nginx", "https_port"))
 
 
 def get_version() -> str | None:
@@ -76,6 +82,8 @@ def _vhost_config(name: str, docroot: str, https: bool = False) -> str:
     error_log = VHOST_ERROR_LOG.format(name=name)
     access_log = VHOST_ACCESS_LOG.format(name=name)
     php_location = _php_location(socket)
+    http_port = get_http_port()
+    https_port = get_https_port()
 
     common_locations = f"""    location / {{
         try_files $uri $uri/ /index.php?$query_string;
@@ -89,13 +97,13 @@ def _vhost_config(name: str, docroot: str, https: bool = False) -> str:
 
     if https:
         return f"""server {{
-    listen {HTTP_PORT};
+    listen {http_port};
     server_name {name}.test;
-    return 301 https://{name}.test:{HTTPS_PORT}$request_uri;
+    return 301 https://{name}.test:{https_port}$request_uri;
 }}
 
 server {{
-    listen {HTTPS_PORT} ssl;
+    listen {https_port} ssl;
     server_name {name}.test;
     root {docroot};
     index index.php index.html;
@@ -110,7 +118,7 @@ server {{
 }}
 """
     return f"""server {{
-    listen {HTTP_PORT};
+    listen {http_port};
     server_name {name}.test;
     root {docroot};
     index index.php index.html;
@@ -145,14 +153,14 @@ def disable_site(conf_filename: str) -> bool:
 
 def _default_site_config() -> str:
     return f"""server {{
-    listen {HTTP_PORT} default_server;
+    listen {get_http_port()} default_server;
     server_name _;
     root /var/www/html;
     index index.html;
 }}
 
 server {{
-    listen {HTTPS_PORT} ssl default_server;
+    listen {get_https_port()} ssl default_server;
     server_name _;
     root /var/www/html;
     index index.html;
@@ -165,9 +173,8 @@ server {{
 def ensure_default_site() -> bool:
     disable_site("default")
     conf_path = SITES_AVAILABLE / f"{DEFAULT_SITE_NAME}.conf"
-    if not conf_path.exists():
-        if not _sudo_write_file(str(conf_path), _default_site_config()):
-            return False
+    if not _sudo_write_file(str(conf_path), _default_site_config()):
+        return False
     if not enable_site(f"{DEFAULT_SITE_NAME}.conf"):
         return False
     # restart (no reload): tras la instalación del paquete, nginx.service puede

@@ -13,11 +13,20 @@ from services.vhosts import (
     FRAMEWORKS, is_command_installed, scaffold_project,
     trash_vhost, slugify,
 )
-from services.nginx import HTTP_PORT as NGINX_HTTP_PORT, HTTPS_PORT as NGINX_HTTPS_PORT
+from services.nginx import get_http_port as get_nginx_http_port, get_https_port as get_nginx_https_port
+from services.apache import get_http_port as get_apache_http_port, get_https_port as get_apache_https_port
 
 
 def _nginx_installed() -> bool:
     return Path("/usr/sbin/nginx").exists()
+
+
+def _apache_url(name: str, https: bool) -> str:
+    protocol = "https" if https else "http"
+    port = get_apache_https_port() if https else get_apache_http_port()
+    default = 443 if https else 80
+    suffix = f":{port}" if port != default else ""
+    return f"{protocol}://{name}.test{suffix}"
 
 
 class VHostRow(Gtk.Box):
@@ -95,11 +104,9 @@ class VHostRow(Gtk.Box):
         self.switch.set_active(enabled)
         self.switch.set_sensitive(True)
         self.link_button.set_sensitive(enabled)
-        self.link_button.set_tooltip_text(
-            f"https://{self.name}.test" if has_https else f"http://{self.name}.test"
-        )
+        self.link_button.set_tooltip_text(_apache_url(self.name, has_https))
         if self.nginx_link_button:
-            port = NGINX_HTTPS_PORT if has_https else NGINX_HTTP_PORT
+            port = get_nginx_https_port() if has_https else get_nginx_http_port()
             protocol = "https" if has_https else "http"
             self.nginx_link_button.set_sensitive(enabled)
             self.nginx_link_button.set_tooltip_text(f"{protocol}://{self.name}.test:{port} (Nginx)")
@@ -116,13 +123,12 @@ class VHostRow(Gtk.Box):
         self._updating = False
 
     def on_open_url(self, button):
-        protocol = "https" if vhost_has_https(self.name) else "http"
-        Gio.AppInfo.launch_default_for_uri(f"{protocol}://{self.name}.test", None)
+        Gio.AppInfo.launch_default_for_uri(_apache_url(self.name, vhost_has_https(self.name)), None)
 
     def on_open_nginx_url(self, button):
         has_https = vhost_has_https(self.name)
         protocol = "https" if has_https else "http"
-        port = NGINX_HTTPS_PORT if has_https else NGINX_HTTP_PORT
+        port = get_nginx_https_port() if has_https else get_nginx_http_port()
         Gio.AppInfo.launch_default_for_uri(f"{protocol}://{self.name}.test:{port}", None)
 
     def on_open_folder(self, button):

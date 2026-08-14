@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from services.systemd import _run_sudo, _sudo_write_file, _run_sudo_output, _run_sudo_feed
 import services.nginx as nginx
+import services.apache as apache
 
 log = logging.getLogger(__name__)
 
@@ -183,14 +184,16 @@ def _vhost_config(name: str, docroot: str, https: bool = False) -> str:
     </Directory>"""
     error_log = VHOST_ERROR_LOG.format(name=name)
     access_log = VHOST_ACCESS_LOG.format(name=name)
+    http_port = apache.get_http_port()
+    https_port = apache.get_https_port()
 
     if https:
-        return f"""<VirtualHost *:80>
+        return f"""<VirtualHost *:{http_port}>
     ServerName {name}.test
-    Redirect permanent / https://{name}.test/
+    Redirect permanent / https://{name}.test:{https_port}/
 </VirtualHost>
 
-<VirtualHost *:443>
+<VirtualHost *:{https_port}>
     ServerName {name}.test
     DocumentRoot {docroot}
     ErrorLog {error_log}
@@ -201,7 +204,7 @@ def _vhost_config(name: str, docroot: str, https: bool = False) -> str:
 {directory_block}
 </VirtualHost>
 """
-    return f"""<VirtualHost *:80>
+    return f"""<VirtualHost *:{http_port}>
     ServerName {name}.test
     DocumentRoot {docroot}
     ErrorLog {error_log}
@@ -249,8 +252,7 @@ def get_vhost_log_paths(name: str) -> tuple[str, str]:
 
 def _ensure_localhost_ssl():
     conf = APACHE_SITES_AVAILABLE / "000-localhost-ssl.conf"
-    if not conf.exists():
-        content = """<VirtualHost *:443>
+    content = f"""<VirtualHost *:{apache.get_https_port()}>
     ServerName localhost
     DocumentRoot /var/www/html
     SSLEngine on
@@ -258,7 +260,7 @@ def _ensure_localhost_ssl():
     SSLCertificateKeyFile /etc/ssl/private/ssl-cert-snakeoil.key
 </VirtualHost>
 """
-        _sudo_write_file(str(conf), content)
+    _sudo_write_file(str(conf), content)
     _run_sudo(["a2ensite", "000-localhost-ssl"])
 
 
@@ -393,12 +395,16 @@ def generate_index_page() -> bool:
         project_dir = str(_project_dir_from_docroot(docroot)) if docroot else ""
 
         nginx_installed = Path("/usr/sbin/nginx").exists()
-        nginx_port       = nginx.HTTPS_PORT if has_https else nginx.HTTP_PORT
+        nginx_port       = nginx.get_https_port() if has_https else nginx.get_http_port()
         nginx_link = (
             f'<a href="{protocol}://{domain}:{nginx_port}" target="_blank" class="card-link card-link-secondary">'
             f'Nginx :{nginx_port} <span class="arrow">&#8594;</span></a>'
             if nginx_installed else ""
         )
+
+        apache_port    = apache.get_https_port() if has_https else apache.get_http_port()
+        apache_default = 443 if has_https else 80
+        apache_domain  = f"{domain}:{apache_port}" if apache_port != apache_default else domain
 
         branch   = get_git_branch(project_dir)
         size     = get_project_size(project_dir)
@@ -447,7 +453,7 @@ def generate_index_page() -> bool:
             <div class="info-row">{_ICON_FOLDER}<span class="value docroot">{docroot}</span></div>
           </div>
           {stats_row}
-          <a href="{protocol}://{domain}" target="_blank" class="card-link">Abrir proyecto <span class="arrow">&#8594;</span></a>
+          <a href="{protocol}://{apache_domain}" target="_blank" class="card-link">Abrir proyecto <span class="arrow">&#8594;</span></a>
           {nginx_link}
         </div>
       </div>"""
@@ -892,6 +898,31 @@ def sync_nginx() -> bool:
         if not nginx.enable_site(f"{name}.test.conf"):
             ok = False
     nginx.reload()
+    generate_index_page()
+    return ok
+
+
+def sync_apache() -> bool:
+    """Regenera la config de Apache de los vhosts habilitados con los puertos
+    actuales (llamar tras cambiar los puertos de Apache en Ajustes)."""
+    ok = True
+    if not apache.write_ports_conf():
+        ok = False
+    if not apache.sync_default_site_port():
+        ok = False
+    if (APACHE_SITES_AVAILABLE / "000-localhost-ssl.conf").exists():
+        _ensure_localhost_ssl()
+    for name in list_projects():
+        if not vhost_is_enabled(name):
+            continue
+        docroot = get_docroot(name)
+        https = vhost_has_https(name)
+        if not _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, docroot, https=https)):
+            ok = False
+    # restart (no reload): un cambio en las directivas Listen de ports.conf no
+    # se aplica con un reload/graceful restart de Apache, hace falta reinicio completo.
+    if not _run_sudo(["systemctl", "restart", "apache2"]):
+        ok = False
     generate_index_page()
     return ok
 

@@ -15,7 +15,7 @@ from services.systemd import (
 from services.apache import get_version as get_apache_version, configtest as apache_configtest
 from services.mysql import get_version as get_mysql_version
 from services.php import get_version as get_php_version
-from services.nginx import get_version as get_nginx_version, configtest as nginx_configtest
+from services.nginx import get_version as get_nginx_version, configtest as nginx_configtest, get_http_port as get_nginx_http_port
 from services.recommendations import get_missing as get_missing_recommendations
 from config import settings
 from services.vhosts import APACHE_SITES_ENABLED
@@ -257,6 +257,9 @@ class ServiceRow(Gtk.Box):
                     if self.service_id == "apache2":
                         ssl_enabled = (APACHE_SITES_ENABLED / "000-localhost-ssl.conf").exists()
                         self.url = "https://localhost" if ssl_enabled else "http://localhost"
+                        self.link_button.set_tooltip_text(self.url)
+                    elif self.service_id == "nginx":
+                        self.url = f"http://localhost:{get_nginx_http_port()}"
                         self.link_button.set_tooltip_text(self.url)
                     self.link_button.set_sensitive(active)
                 if self.service.get("reloadable"):
