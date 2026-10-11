@@ -8,13 +8,17 @@
   <summary>Gestiona tu stack LAMP en GNOME</summary>
 
   <description>
-    <p>LAMP Manager es una aplicación de escritorio para GNOME que permite gestionar los servicios de un stack LAMP (Apache, MySQL, PHP-FPM) de forma visual, sin necesidad de usar la terminal.</p>
+    <p>LAMP Manager es una aplicación de escritorio para GNOME que permite gestionar los servicios de un stack LAMP (Apache, Nginx, MySQL, PHP-FPM) de forma visual, sin necesidad de usar la terminal.</p>
     <ul>
-      <li>Arrancar, parar y recargar servicios Apache, MySQL y PHP-FPM</li>
-      <li>Gestión de hosts virtuales de Apache</li>
-      <li>Editor de parámetros de php.ini</li>
+      <li>Arrancar, parar y recargar Apache, Nginx, MySQL y PHP-FPM</li>
+      <li>Hosts virtuales .test servidos por Apache y Nginx, con HTTPS mediante mkcert</li>
+      <li>Creación de proyectos PHP, Laravel, Symfony y WordPress</li>
+      <li>Papelera para recuperar vhosts eliminados con sus archivos y su base de datos</li>
+      <li>Gestión de bases de datos y usuarios de MySQL</li>
+      <li>Editor de parámetros de php.ini y gestión de extensiones y módulos</li>
       <li>Visor de registros con colores por nivel de severidad</li>
-      <li>Detección de puertos en uso por cada servicio</li>
+      <li>Dashboard de proyectos en localhost</li>
+      <li>Icono en la bandeja del sistema, notificaciones y arranque automático</li>
       <li>Soporte para Mailpit como servidor de correo de desarrollo</li>
     </ul>
   </description>
@@ -31,6 +35,22 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.3.0" date="2026-10-11">
+      <description>
+        <p>Nginx en paralelo a Apache, dashboard de proyectos rediseñado y mejoras de seguridad.</p>
+        <ul>
+          <li>Nginx sirve los mismos vhosts en los puertos 8080/8443, configurables desde Ajustes</li>
+          <li>Detección y registro de carpetas de proyecto sin vhost</li>
+          <li>La configuración de Apache se valida antes de recargar</li>
+          <li>Correcciones en el arranque automático y en los permisos de los ficheros de configuración</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.2.0" date="2026-06-05">
+      <description>
+        <p>Icono dinámico en la bandeja del sistema, notificaciones, arranque automático y registro centralizado.</p>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-05-04">
       <description>
         <p>Primera versión pública.</p>

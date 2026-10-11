@@ -1,17 +1,45 @@
-.TH LAMP\-MANAGER 1 "2026-05-04" "0.1.0" "LAMP Manager"
+.TH LAMP\-MANAGER 1 "2026-10-11" "0.3.0" "LAMP Manager"
 .SH NAME
 lamp\-manager \- gestor gráfico de servicios LAMP para GNOME
 .SH SYNOPSIS
 .B lamp\-manager
+.RB [ \-\-autostart ]
 .SH DESCRIPTION
 .B lamp\-manager
 es una aplicación GTK4 para gestionar los servicios de un stack LAMP
-(Apache, MySQL, PHP\-FPM) en un escritorio GNOME.
-Permite arrancar y parar servicios, gestionar hosts virtuales de Apache,
-editar parámetros de php.ini y consultar los registros del sistema.
+(Apache, Nginx, MySQL, PHP\-FPM) en un escritorio GNOME.
+Permite arrancar y parar servicios, gestionar hosts virtuales
+.I .test
+servidos por Apache y Nginx, crear proyectos PHP, Laravel, Symfony y WordPress,
+editar parámetros de php.ini, administrar bases de datos y usuarios de MySQL
+y consultar los registros de cada servicio.
+.PP
+La aplicación es de instancia única: si ya está en marcha, volver a lanzarla
+muestra su ventana.
+.SH OPTIONS
+.TP
+.B \-\-autostart
+Arranca en segundo plano, solo con el icono en la bandeja del sistema, si la
+contraseña de administrador está guardada en el llavero de GNOME.
+Es la opción que usa el arranque automático configurable desde Ajustes.
+.TP
+.B \-\-help
+Muestra la ayuda de las opciones.
+.SH FILES
+.TP
+.I ~/.config/lamp\-manager/config.ini
+Ajustes de la aplicación: directorio de proyectos, puertos y Mailpit.
+.TP
+.I ~/.config/lamp\-manager/frameworks.json
+Frameworks disponibles al crear un proyecto.
+.TP
+.I ~/.local/share/lamp\-manager/
+Registro de la aplicación, certificados HTTPS de los vhosts y papelera.
 .SH AUTHOR
-Juan Diez <nefreyu.99@gmail.com>
+Juan Díez <nefreyu.99@gmail.com>
 .SH SEE ALSO
 .BR apache2 (8),
+.BR nginx (8),
 .BR mysqld (8),
-.BR php\-fpm (8)
+.BR php\-fpm (8),
+.BR mkcert (1)

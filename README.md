@@ -1,40 +1,50 @@
 # LAMP Manager
 
-A GTK4 graphical application to manage your LAMP stack on GNOME desktops. Start and stop services, manage Apache virtual hosts, configure PHP, and monitor logs — all without touching the terminal.
+A GTK4 application to manage your local PHP development stack on GNOME desktops. Start and stop Apache, Nginx, MySQL and PHP-FPM, create projects with their own `.test` domain, configure PHP and read the logs — all without touching the terminal.
 
-> Designed for Ubuntu/Debian developers who work with Apache, MySQL and PHP-FPM on a daily basis.
+> Designed for Ubuntu developers who work with Apache, MySQL and PHP-FPM on a daily basis.
 
 ---
 
 ## Features
 
-- **Service control** — Start and stop Apache, MySQL and PHP-FPM with a single toggle
-- **Port monitoring** — See which ports each service is currently listening on
-- **Virtual host management** — Create, enable, disable and delete Apache virtual hosts
-- **PHP configuration** — Edit `php.ini` parameters directly from the UI
-- **Log viewer** — Browse service logs with color-coded severity levels
-- **Mailpit integration** — Install, configure and control the Mailpit email testing service
-- **phpMyAdmin shortcut** — Quick access to phpMyAdmin in the browser
-- **Recommendations panel** — Warns you about recommended services that are not installed
-- **Apache + PHP-FPM warning** — Alerts you when Apache is running but PHP-FPM is not, which would break PHP projects
+- **Service control** — Start, stop, reload and restart Apache, Nginx, MySQL, PHP-FPM and Mailpit
+- **`.test` virtual hosts** — Each project gets a `name.test` domain served by Apache (ports 80/443) and Nginx (8080/8443), with optional HTTPS through [mkcert](https://github.com/FiloSottile/mkcert)
+- **Project creation** — Create plain PHP, Laravel, Symfony or WordPress projects; frameworks are configurable in `~/.config/lamp-manager/frameworks.json`
+- **Unregistered folders** — Folders in your projects directory without a virtual host are detected and can be registered with one click
+- **Safe changes** — Apache configuration is validated with `configtest` before reloading and reverted if invalid
+- **Trash** — Deleted projects keep their configuration, files, database and certificates, and can be restored
+- **MySQL** — Create and drop databases and users, and grant access
+- **PHP** — Edit common `php.ini` parameters and enable or disable extensions
+- **Apache modules** — Enable or disable modules, validated before applying
+- **Log viewer** — Service and per-project logs with color-coded severity levels
+- **Dashboard** — `http://localhost` lists your projects with their framework, git branch, size and recent errors
+- **System tray** — Status icon (blue, orange or red), notifications when a service stops, minimize to tray and start at login
+- **Mailpit integration** — Install and configure the [Mailpit](https://github.com/axllent/mailpit) email testing service
+- **Recommendations** — Warns about recommended services that are not installed, with the command to install them
 
 ---
 
 ## Screenshots
 
 ### Services
+
 ![Services](screenshots/services.png)
 
 ### Virtual hosts
+
 ![Virtual hosts](screenshots/vhosts.png)
 
 ### PHP configuration
+
 ![PHP configuration](screenshots/phpconfig.png)
 
 ### PHP extensions
+
 ![PHP extensions](screenshots/phpextensions.png)
 
 ### Log viewer
+
 ![Apache error log](screenshots/apachelogerror.png)
 ![PHP log](screenshots/phplog.png)
 
@@ -42,18 +52,16 @@ A GTK4 graphical application to manage your LAMP stack on GNOME desktops. Start 
 
 ## Requirements
 
-- Ubuntu 24.04 (Noble Numbat) or later, or any GNOME-based Debian derivative
-- Python 3.10 or later
-- GTK 4 (`gir1.2-gtk-4.0`)
-- PyGObject (`python3-gi`)
-- `gvfs-backends` (for filesystem operations)
-- `sudo` access (required to manage systemd services)
+- Ubuntu 26.04 (packages in the PPA are built for this release)
+- Python 3.10 or later, GTK 4 and libadwaita
+- `sudo` access (required to manage services and configuration files)
 
-**Recommended services** (the application manages these, but does not require them to launch):
+**Recommended services** (the application manages them, but does not require them to start):
 
-- `apache2`
-- `php-fpm` (any version)
-- `default-mysql-server` or `mysql-server`
+- `apache2` and/or `nginx`
+- `php-fpm` (any version from 8.0)
+- `mysql-server` or `mariadb-server`
+- `mkcert` for HTTPS, `composer` for Laravel and Symfony projects
 
 ---
 
@@ -72,34 +80,22 @@ sudo apt install lamp-manager
 Download the latest `.deb` from the [Releases page](https://github.com/Nefreyu/lamp-manager/releases) and install it:
 
 ```bash
-sudo dpkg -i lamp-manager_0.1.2_all.deb
-sudo apt-get install -f   # installs any missing dependencies
+sudo apt install ./lamp-manager_*_all.deb
 ```
 
 ### Option 3 — Run from source
-
-Clone the repository and run directly with Python:
 
 ```bash
 git clone https://github.com/Nefreyu/lamp-manager.git
 cd lamp-manager
 
-# Install system dependencies
-sudo apt install python3-gi gir1.2-gtk-4.0 gvfs-backends
+sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-secret-1 \
+    gir1.2-dbusmenu-glib-0.4 gvfs-backends
 
-# Run
 python3 main.py
 ```
 
-No virtual environment or pip packages are needed — the application relies entirely on system packages.
-
-If you prefer to use a virtual environment, create it with `--system-site-packages` so that GTK bindings remain accessible:
-
-```bash
-python3 -m venv --system-site-packages .venv
-source .venv/bin/activate
-python3 main.py
-```
+No pip packages are needed — the application relies entirely on system packages. When run from source, it installs its icons and launcher in `~/.local/share` so it shows up in the application menu.
 
 ---
 
@@ -108,112 +104,91 @@ python3 main.py
 Launch LAMP Manager from your application menu or run:
 
 ```bash
-lamp-manager
+lamp-manager              # open the window
+lamp-manager --autostart  # start in the background, only in the system tray
 ```
+
+On first launch the application asks for your administrator password. It is validated and stored in the GNOME Keyring so it is not requested again.
 
 ### Services tab
 
-The main screen shows all detected services. Each row displays:
+Each detected service shows its version, the ports it listens on and a switch to start or stop it. Services with a web interface (Apache, Nginx, phpMyAdmin, Mailpit) have a button to open it in the browser. If Apache is running but PHP-FPM is not, a banner offers to start it.
 
-- The service name and version
-- The ports it is currently using
-- A toggle switch to start or stop it
-- A browser button (for services with a web interface)
-- A reload button (for Apache, to apply configuration changes without a full restart)
+### Virtual hosts section
 
-If Apache is active but PHP-FPM is not, a warning banner appears at the top with a one-click fix.
+- **New project** — Choose a name and a framework; the name is converted to a valid domain (`My Project` → `my-project.test`). A database with the same name is created when MySQL is available.
+- **Enable / disable** — Adds or removes the site in Apache, Nginx and `/etc/hosts`.
+- **HTTPS** — Generates a trusted local certificate with mkcert.
+- **Configuration** — Change the DocumentRoot (it must stay inside your projects directory), edit the Apache configuration and read the project logs.
+- **Trash** — Moving a project to the trash disables it and keeps everything needed to restore it later.
 
-### Virtual hosts
-
-The **Virtual Hosts** section lets you manage Apache site configurations:
-
-- Create new virtual hosts with a name and document root
-- Enable or disable existing sites (`a2ensite` / `a2dissite`)
-- Delete site configuration files
-
-### PHP configuration
-
-The **PHP** section allows you to modify common `php.ini` values (memory limit, upload size, execution time, etc.) through a form, without having to locate and edit the file manually.
-
-### Log viewer
-
-The **Logs** section displays systemd journal entries for each service. Log lines are color-coded by severity:
-
-| Color | Level |
-|-------|-------|
-| Red | Error / Critical |
-| Orange | Warning |
-| Gray | Debug / Info |
-
-### Mailpit
-
-[Mailpit](https://github.com/axllent/mailpit) is an email testing tool for local development. LAMP Manager lets you:
-
-- Install and uninstall Mailpit as a systemd service
-- Configure storage and SMTP settings
-- Open the Mailpit web UI directly from the services list
-
----
-
-## Project structure
-
-```
-lamp-manager/
-├── main.py                  # Entry point
-├── windows/
-│   ├── main_window.py       # Main application window
-│   └── password_dialog.py   # sudo password dialog
-├── pages/
-│   ├── servicios.py         # Services overview
-│   ├── vhosts.py            # Virtual host management
-│   ├── php_config.py        # PHP configuration
-│   ├── log_viewer.py        # Log viewer
-│   ├── mailpit_config.py    # Mailpit settings
-│   ├── mysql_config.py      # MySQL information
-│   ├── apache_config.py     # Apache information
-│   └── ajustes.py           # Application settings
-├── services/
-│   ├── systemd.py           # systemd service control
-│   ├── apache.py            # Apache-specific helpers
-│   ├── mysql.py             # MySQL-specific helpers
-│   ├── php.py               # PHP-specific helpers
-│   ├── vhosts.py            # Virtual host file management
-│   └── recommendations.py   # Missing service detection
-├── config/
-│   └── settings.py          # Persistent settings
-├── data/
-│   └── io.github.nefreyu.LampManager.metainfo.xml
-├── packaging/
-│   └── io.github.nefreyu.LampManager.desktop
-└── debian/                  # Debian packaging files
-```
+The projects directory (`~/www` by default) and the Apache and Nginx ports can be changed in **Settings**.
 
 ---
 
 ## How it works
 
-LAMP Manager uses standard Linux tools under the hood:
+LAMP Manager uses the standard tools of your system:
 
-- **systemd** (`systemctl`) — to start, stop, enable and check service status
-- **ss** — to detect which ports each service is listening on
-- **a2ensite / a2dissite** — to manage Apache virtual hosts
-- **journalctl** — to read service logs
-- **sudo** — for privileged operations; the application asks for your password when needed
+- **systemd** (`systemctl`) — to start, stop and check services
+- **a2ensite / a2enmod / phpenmod** — to manage Apache sites and modules and PHP extensions
+- **apache2ctl configtest** — to validate the configuration before applying it
+- **ss** — to detect the ports each service is listening on
+- **sudo** — for privileged operations, using the password stored in the GNOME Keyring
 
-No daemons, no background processes, no polling — everything is read on demand.
+While it is running, it checks the status of the services every 30 seconds to update the tray icon, and watches your projects directory and git branches to keep the dashboard up to date.
+
+Settings are stored in `~/.config/lamp-manager/`, and the log, HTTPS certificates and trash in `~/.local/share/lamp-manager/`.
+
+---
+
+## Project structure
+
+```text
+lamp-manager/
+├── main.py              # Entry point (Adw.Application)
+├── config/              # Settings, logging and version
+├── windows/             # Main window, password dialog and splash screen
+├── pages/               # One page per section: services, virtual hosts, settings…
+├── services/            # Logic: systemd, Apache, Nginx, MySQL, PHP, vhosts, hosts, tray…
+├── tests/               # pytest test suite
+├── data/                # AppStream metainfo and man page
+├── packaging/           # .desktop file and icons
+└── debian/              # Debian packaging
+```
+
+---
+
+## Development
+
+The tests use pytest. Create a virtual environment with access to the system GTK bindings and run them:
+
+```bash
+python3 -m venv --system-site-packages .venv
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest
+```
+
+To build the Debian package (requires `debhelper`):
+
+```bash
+dpkg-buildpackage -us -uc -b
+```
+
+The `.deb` is created in the parent directory.
 
 ---
 
 ## Contributing
 
-Contributions are welcome. To get started:
+Contributions are welcome:
 
 1. Fork the repository
 2. Create a branch: `git checkout -b my-feature`
-3. Make your changes and test them
+3. Make your changes, add tests where possible and run the test suite
 4. Open a pull request
 
-Please keep commits focused and write clear commit messages. There are no automated tests yet, so manual testing against a real LAMP environment is expected.
+Changes that touch services or system files should also be tested manually against a real LAMP environment.
 
 ---
 
