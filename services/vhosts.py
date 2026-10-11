@@ -13,6 +13,7 @@ from pathlib import Path
 from services.systemd import _run_sudo, _sudo_write_file, _run_sudo_output, _run_sudo_feed
 import services.nginx as nginx
 import services.apache as apache
+import services.hosts as hosts
 
 log = logging.getLogger(__name__)
 
@@ -118,7 +119,6 @@ def scaffold_project(framework: dict, name: str, projects_dir: str, on_progress=
         return False, str(e)
 
 HOSTS_FILE = Path("/etc/hosts")
-HOSTS_MARKER = "# lamp-manager"
 APACHE_SITES_AVAILABLE = Path("/etc/apache2/sites-available")
 APACHE_SITES_ENABLED = Path("/etc/apache2/sites-enabled")
 INDEX_PAGE = Path("/var/www/html/index.html")
@@ -310,16 +310,18 @@ def disable_https(name: str) -> bool:
 
 def add_hosts_entry(domain: str) -> bool:
     current = HOSTS_FILE.read_text()
-    if domain in current:
+    new_content = hosts.add_entry(current, domain)
+    if new_content == current:
         return True
-    new_content = current.rstrip("\n") + f"\n127.0.0.1\t{domain}\t{HOSTS_MARKER}\n"
     return _sudo_write_file(str(HOSTS_FILE), new_content)
 
 
 def remove_hosts_entry(domain: str) -> bool:
     current = HOSTS_FILE.read_text()
-    lines = [l for l in current.splitlines(keepends=True) if domain not in l]
-    return _sudo_write_file(str(HOSTS_FILE), "".join(lines))
+    new_content = hosts.remove_entry(current, domain)
+    if new_content == current:
+        return True
+    return _sudo_write_file(str(HOSTS_FILE), new_content)
 
 
 def generate_index_page() -> bool:
