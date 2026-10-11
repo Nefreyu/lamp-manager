@@ -95,7 +95,7 @@ class RecommendationsPanel(Gtk.Box):
             cmd_row.set_margin_top(4)
 
             cmd_label = Gtk.Label()
-            cmd_label.set_markup(f"<tt>{opt['cmd']}</tt>")
+            cmd_label.set_markup(f"<tt>{GLib.markup_escape_text(opt['cmd'])}</tt>")
             cmd_label.set_xalign(0)
             cmd_label.set_hexpand(True)
             cmd_row.append(cmd_label)

@@ -48,7 +48,7 @@ class VHostRow(Gtk.Box):
         name_label.set_xalign(0)
         btn_content.append(name_label)
         domain_label = Gtk.Label()
-        domain_label.set_markup(f"<span color='gray'>{name}.test</span>")
+        domain_label.set_markup(f"<span color='gray'>{GLib.markup_escape_text(name)}.test</span>")
         btn_content.append(domain_label)
         projects_dir = settings.get("general", "projects_dir")
         project_dir = get_project_dir(name)
@@ -466,7 +466,7 @@ class VHostsPage(Gtk.Box):
         content.append(fw_dropdown)
 
         fw_desc = Gtk.Label()
-        fw_desc.set_markup(f"<span color='gray' size='small'>{FRAMEWORKS[0]['description']}</span>")
+        fw_desc.set_markup(f"<span color='gray' size='small'>{GLib.markup_escape_text(FRAMEWORKS[0]['description'])}</span>")
         fw_desc.set_xalign(0)
         content.append(fw_desc)
 
@@ -475,16 +475,19 @@ class VHostsPage(Gtk.Box):
         content.append(warn_label)
 
         info = Gtk.Label()
-        info.set_markup(f"<span color='gray' size='small'>Se creará en {projects_dir}</span>")
+        info.set_markup(f"<span color='gray' size='small'>Se creará en {GLib.markup_escape_text(projects_dir)}</span>")
         info.set_xalign(0)
         content.append(info)
 
         error_label = Gtk.Label(label="")
         error_label.set_xalign(0)
+        error_label.set_wrap(True)
+        error_label.set_selectable(True)
         content.append(error_label)
 
         progress_label = Gtk.Label(label="")
         progress_label.set_xalign(0)
+        progress_label.set_wrap(True)
         content.append(progress_label)
 
         btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -528,10 +531,10 @@ class VHostsPage(Gtk.Box):
 
         def on_framework_changed(dropdown, _):
             fw = FRAMEWORKS[dropdown.get_selected()]
-            fw_desc.set_markup(f"<span color='gray' size='small'>{fw['description']}</span>")
+            fw_desc.set_markup(f"<span color='gray' size='small'>{GLib.markup_escape_text(fw['description'])}</span>")
             if fw.get("requires") and not is_command_installed(fw["requires"]):
                 warn_label.set_markup(
-                    f"<span color='orange'>⚠ {fw['requires']} no está instalado</span>"
+                    f"<span color='orange'>⚠ {GLib.markup_escape_text(fw['requires'])} no está instalado</span>"
                 )
                 create_btn.set_sensitive(False)
             else:
@@ -563,11 +566,11 @@ class VHostsPage(Gtk.Box):
             def run():
                 def on_progress(msg):
                     GLib.idle_add(progress_label.set_markup,
-                                  f"<span color='gray' size='small'>{msg}</span>")
+                                  f"<span color='gray' size='small'>{GLib.markup_escape_text(msg)}</span>")
                 ok, err = scaffold_project(fw, name, projects_dir, on_progress)
                 if not ok:
                     GLib.idle_add(error_label.set_markup,
-                                  f"<span color='red'>Error: {err}</span>")
+                                  f"<span color='red'>Error: {GLib.markup_escape_text(err or '')}</span>")
                     GLib.idle_add(create_btn.set_sensitive, True)
                     GLib.idle_add(create_btn.set_label, "Crear")
                     return

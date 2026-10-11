@@ -133,5 +133,5 @@ class MailpitConfigPage(Gtk.Box):
 
     def _show_status(self, success: bool, message: str):
         color = "green" if success else "red"
-        self.status_label.set_markup(f"<span color='{color}'>{message}</span>")
+        self.status_label.set_markup(f"<span color='{color}'>{GLib.markup_escape_text(message)}</span>")
         GLib.timeout_add_seconds(3, lambda: self.status_label.set_markup("") or False)

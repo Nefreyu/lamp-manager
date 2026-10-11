@@ -107,7 +107,7 @@ class VHostConfigPage(Gtk.Box):
 
     def load(self, name: str):
         self._name = name
-        self.title.set_markup(f"<span size='x-large' weight='bold'>{name}.test</span>")
+        self.title.set_markup(f"<span size='x-large' weight='bold'>{GLib.markup_escape_text(name)}.test</span>")
         ensure_vhost_logs(name)
         self.docroot_entry.set_text(get_docroot(name))
         content = _run_sudo_output(["cat", str(vhost_config_path(name))]) or ""
