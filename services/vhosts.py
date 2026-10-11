@@ -9,6 +9,7 @@ import subprocess
 import urllib.request
 import zipfile
 from datetime import datetime
+from html import escape as html_escape
 from pathlib import Path
 from services.systemd import _run_sudo, _sudo_write_file, _run_sudo_output, _run_sudo_feed
 import services.nginx as nginx
@@ -455,8 +456,8 @@ def generate_index_page() -> bool:
             dot_cls = "tool-dot-on" if active else "tool-dot-off"
             state = "activo" if active else "detenido"
             items.append(
-                f'      <a href="{svc["url"]}" target="_blank" class="tool" title="{state}">'
-                f'{icon}<span class="tool-label">{svc["label"]}</span>'
+                f'      <a href="{html_escape(svc["url"])}" target="_blank" class="tool" title="{state}">'
+                f'{icon}<span class="tool-label">{html_escape(svc["label"])}</span>'
                 f'<span class="tool-dot {dot_cls}"></span></a>'
             )
         if not items:
@@ -483,8 +484,9 @@ def generate_index_page() -> bool:
 
         nginx_installed = Path("/usr/sbin/nginx").exists()
         nginx_port       = nginx.get_https_port() if has_https else nginx.get_http_port()
+        nginx_url        = f"{protocol}://{domain}:{nginx_port}"
         nginx_link = (
-            f'<a href="{protocol}://{domain}:{nginx_port}" target="_blank" class="card-link card-link-secondary">'
+            f'<a href="{html_escape(nginx_url)}" target="_blank" class="card-link card-link-secondary">'
             f'Nginx :{nginx_port} <span class="arrow">&#8594;</span></a>'
             if nginx_installed else ""
         )
@@ -492,6 +494,7 @@ def generate_index_page() -> bool:
         apache_port    = apache.get_https_port() if has_https else apache.get_http_port()
         apache_default = 443 if has_https else 80
         apache_domain  = f"{domain}:{apache_port}" if apache_port != apache_default else domain
+        apache_url     = f"{protocol}://{apache_domain}"
 
         branch   = get_git_branch(project_dir)
         size     = get_project_size(project_dir)
@@ -507,15 +510,15 @@ def generate_index_page() -> bool:
         branch_html = (
             f'<span class="branch-badge">'
             f'<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>'
-            f'{branch}</span>'
+            f'{html_escape(branch)}</span>'
             if branch else ""
         )
 
         stats = []
         if size:
-            stats.append(f'<span class="stat">&#128230; {size}</span>')
+            stats.append(f'<span class="stat">&#128230; {html_escape(size)}</span>')
         if last_mod:
-            stats.append(f'<span class="stat">&#128336; {last_mod}</span>')
+            stats.append(f'<span class="stat">&#128336; {html_escape(last_mod)}</span>')
         if errors > 0:
             label = "error" if errors == 1 else "errores"
             stats.append(f'<span class="stat stat-error">&#9888; {errors} {label}</span>')
@@ -530,17 +533,17 @@ def generate_index_page() -> bool:
         return f"""      <div class="card" style="--fw:{c['accent']}; --fw-glow:rgba({c['rgb']},0.30); --band1:{c['band1']}; --band2:{c['band2']}; animation-delay:{i * 50}ms">
         <div class="card-band">
           {logo}
-          <span class="card-name">{name}</span>
+          <span class="card-name">{html_escape(name)}</span>
           {https_badge}
         </div>
         <div class="card-body">
           <div class="card-info">
-            <div class="info-row">{_ICON_GLOBE}<span class="value">{domain}</span></div>
+            <div class="info-row">{_ICON_GLOBE}<span class="value">{html_escape(domain)}</span></div>
             <div class="info-row">{_ICON_CODE}<span class="fw-badge {fw_cls}">{fw_label}</span>{branch_html}</div>
-            <div class="info-row">{_ICON_FOLDER}<span class="value docroot">{docroot}</span></div>
+            <div class="info-row">{_ICON_FOLDER}<span class="value docroot">{html_escape(docroot)}</span></div>
           </div>
           {stats_row}
-          <a href="{protocol}://{apache_domain}" target="_blank" class="card-link">Abrir proyecto <span class="arrow">&#8594;</span></a>
+          <a href="{html_escape(apache_url)}" target="_blank" class="card-link">Abrir proyecto <span class="arrow">&#8594;</span></a>
           {nginx_link}
         </div>
       </div>"""
