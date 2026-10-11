@@ -6,6 +6,7 @@ from pathlib import Path
 
 from config import log as _log_setup
 _log_setup.setup()
+log = logging.getLogger(__name__)
 
 try:
     from config.dev import DEV_MODE, SKIP_PASSWORD_DIALOG
@@ -78,10 +79,37 @@ from services.systemd import validate_password, set_password
 class App(Adw.Application):
     def __init__(self):
         super().__init__(application_id="io.github.nefreyu.LampManager")
+        self._autostart = False
+        self._window: MainWindow | None = None
+        self._tray: SystemTray | None = None
+        self.add_main_option(
+            "autostart", 0, GLib.OptionFlags.NONE, GLib.OptionArg.NONE,
+            "Arrancar en segundo plano en el área de notificación", None,
+        )
+        self.connect("handle-local-options", self.on_handle_local_options)
         self.connect("activate", self.on_activate)
 
+    def on_handle_local_options(self, app, options: GLib.VariantDict) -> int:
+        self._autostart = options.contains("autostart")
+        if self._autostart:
+            # Si ya hay una instancia en marcha, un --autostart tardío no debe
+            # sacar su ventana: se termina sin enviarle "activate".
+            try:
+                self.register(None)
+            except GLib.Error as e:
+                log.warning("No se pudo registrar la aplicación: %s", e)
+            if self.get_is_remote():
+                return 0
+        return -1
+
     def on_activate(self, app):
-        self._autostart = "--autostart" in sys.argv
+        # GApplication es de instancia única: relanzar la app reenvía "activate"
+        # a la instancia en marcha, que solo debe mostrar su ventana.
+        if self._window is not None:
+            self._window.present()
+            if self._tray is not None:
+                self._tray.set_window_visible(True)
+            return
         self._window = MainWindow(self)
         self._splash = SplashWindow(app)
         self._splash.present()
