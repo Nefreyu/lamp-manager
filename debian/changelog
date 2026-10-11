@@ -1,3 +1,9 @@
+lamp-manager (0.3.1) resolute; urgency=medium
+
+  * Actualizar el correo de contacto en la licencia y en debian/copyright.
+
+ -- Juan Díez <nefreyu.99@gmail.com>  Sun, 11 Oct 2026 22:57:05 +0200
+
 lamp-manager (0.3.0) resolute; urgency=medium
 
   [ Novedades ]
