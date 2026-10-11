@@ -791,17 +791,45 @@ def get_docroot(name: str) -> str:
     return ""
 
 
-def update_docroot(name: str, new_docroot: str) -> bool:
+def _apply_apache_config(path: Path, new_content: str) -> tuple[bool, str]:
+    """Escribe una config de Apache, la valida con configtest y recarga.
+
+    Si la validación falla se restaura el contenido anterior: una config rota no
+    impide el reload en caliente, pero sí que Apache arranque tras reiniciar.
+    """
+    previous = _read_root_file(path) if path.exists() else None
+    if path.exists() and previous is None:
+        return False, f"No se pudo leer la configuración actual de {path}"
+    if not _sudo_write_file(str(path), new_content):
+        return False, f"No se pudo escribir {path}"
+    ok, output = apache.configtest()
+    if not ok:
+        log.warning("configtest falló tras escribir %s: %s", path, output)
+        if previous is not None:
+            _sudo_write_file(str(path), previous)
+        else:
+            _run_sudo(["rm", "-f", str(path)])
+        return False, output or "La configuración de Apache no es válida"
+    if not _run_sudo(["systemctl", "reload", "apache2"]):
+        return False, "La configuración es válida, pero Apache no se pudo recargar"
+    return True, ""
+
+
+def save_vhost_config(name: str, content: str) -> tuple[bool, str]:
+    return _apply_apache_config(vhost_config_path(name), content)
+
+
+def update_docroot(name: str, new_docroot: str) -> tuple[bool, str]:
     config = vhost_config_path(name)
     if not config.exists():
-        return False
+        return False, f"No existe la configuración de {name}.test"
     # Un DocumentRoot inexistente no hace fallar a Apache, pero deja el sitio en 403
     if not Path(new_docroot).is_dir():
         log.warning("DocumentRoot inexistente para %s: %s", name, new_docroot)
-        return False
+        return False, f"El directorio {new_docroot} no existe"
     content = _read_root_file(config)
     if content is None:
-        return False
+        return False, f"No se pudo leer la configuración de {name}.test"
     lines = []
     for line in content.splitlines():
         stripped = line.strip()
@@ -812,13 +840,13 @@ def update_docroot(name: str, new_docroot: str) -> bool:
             lines.append(f"{indent}<Directory {new_docroot}>")
         else:
             lines.append(line)
-    if not _sudo_write_file(str(config), "\n".join(lines) + "\n"):
-        return False
-    ok = _run_sudo(["systemctl", "reload", "apache2"])
+    ok, error = _apply_apache_config(config, "\n".join(lines) + "\n")
+    if not ok:
+        return False, error
     nginx.write_vhost_config(name, new_docroot, https=vhost_has_https(name))
     nginx.reload()
     generate_index_page()
-    return ok
+    return True, ""
 
 
 def _detect_docroot(projects_dir: str, name: str) -> str:
@@ -1007,25 +1035,26 @@ def plan_project_rename(name: str, new_docroot: str, projects_dir: str) -> tuple
     return old_project, new_project
 
 
-def rename_project(name: str, new_docroot: str, src: Path, dst: Path) -> bool:
+def rename_project(name: str, new_docroot: str, src: Path, dst: Path) -> tuple[bool, str]:
     """Renombra la carpeta del proyecto y apunta el vhost a ella; si falla, lo deshace."""
     old_docroot = get_docroot(name)
     try:
         src.rename(dst)
     except OSError as e:
         log.error("No se pudo renombrar %s a %s: %s", src, dst, e)
-        return False
-    if update_docroot(name, new_docroot):
-        return True
+        return False, f"No se pudo renombrar la carpeta: {e}"
+    ok, error = update_docroot(name, new_docroot)
+    if ok:
+        return True, ""
 
     log.error("Falló la actualización del vhost %s; deshaciendo el renombrado", name)
     try:
         dst.rename(src)
     except OSError as e:
         log.error("No se pudo deshacer el renombrado de %s: %s", dst, e)
-        return False
+        return False, f"{error}\nNo se pudo devolver la carpeta a {src}: {e}"
     update_docroot(name, old_docroot)
-    return False
+    return False, error
 
 
 def trash_vhost(name: str) -> bool:

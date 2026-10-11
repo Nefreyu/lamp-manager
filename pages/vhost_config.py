@@ -7,9 +7,9 @@ from pathlib import Path
 from config import settings
 from services.vhosts import (
     get_docroot, update_docroot, vhost_config_path, get_vhost_log_paths, ensure_vhost_logs,
-    plan_project_rename, rename_project,
+    plan_project_rename, rename_project, save_vhost_config,
 )
-from services.systemd import _run_sudo_output, _sudo_write_file
+from services.systemd import _run_sudo_output
 from pages.log_viewer import LogViewer
 
 
@@ -60,7 +60,10 @@ class VHostConfigPage(Gtk.Box):
 
         self.status_label = Gtk.Label(label="")
         self.status_label.set_xalign(0)
+        self.status_label.set_wrap(True)
+        self.status_label.set_selectable(True)
         self.append(self.status_label)
+        self._status_timeout_id: int | None = None
 
         self.append(Gtk.Separator())
 
@@ -133,12 +136,12 @@ class VHostConfigPage(Gtk.Box):
             self._show_status(False, "El DocumentRoot no puede estar vacío")
             return
         if Path(new_docroot).is_dir():
-            ok = update_docroot(self._name, new_docroot)
+            ok, error = update_docroot(self._name, new_docroot)
             if ok:
                 self.load(self._name)
                 self._show_status(True, "DocumentRoot actualizado correctamente")
             else:
-                self._show_status(False, "Error al actualizar el DocumentRoot")
+                self._show_status(False, f"Error al actualizar el DocumentRoot:\n{error}")
             return
 
         rename = plan_project_rename(self._name, new_docroot, settings.get("general", "projects_dir"))
@@ -167,24 +170,35 @@ class VHostConfigPage(Gtk.Box):
                 return
         except GLib.Error:
             return
-        if rename_project(self._name, new_docroot, src, dst):
-            self.load(self._name)
+        ok, error = rename_project(self._name, new_docroot, src, dst)
+        self.load(self._name)
+        if ok:
             self._show_status(True, f"Carpeta renombrada a {dst.name} y DocumentRoot actualizado")
         else:
-            self.load(self._name)
-            self._show_status(False, "Error al renombrar la carpeta; se ha dejado como estaba")
+            self._show_status(False, f"Error al renombrar la carpeta; se ha dejado como estaba:\n{error}")
 
     def on_save_raw(self, button):
         buf = self.raw_view.get_buffer()
         content = buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False)
-        ok = _sudo_write_file(str(vhost_config_path(self._name)), content)
+        ok, error = save_vhost_config(self._name, content)
         if ok:
             self.load(self._name)
-            self._show_status(True, "Configuración guardada correctamente")
+            self._show_status(True, "Configuración guardada y Apache recargado")
         else:
-            self._show_status(False, "Error al guardar la configuración")
+            # No se recarga el editor: así el usuario conserva su texto para corregirlo
+            self._show_status(False, f"No se ha guardado: la configuración no es válida.\n{error}")
 
     def _show_status(self, success: bool, message: str):
         color = "green" if success else "red"
         self.status_label.set_markup(f"<span color='{color}'>{GLib.markup_escape_text(message)}</span>")
-        GLib.timeout_add_seconds(5, lambda: self.status_label.set_markup("") or False)
+        if self._status_timeout_id is not None:
+            GLib.source_remove(self._status_timeout_id)
+            self._status_timeout_id = None
+        # Los errores se quedan visibles hasta la siguiente acción
+        if success:
+            self._status_timeout_id = GLib.timeout_add_seconds(5, self._clear_status)
+
+    def _clear_status(self) -> bool:
+        self.status_label.set_markup("")
+        self._status_timeout_id = None
+        return False
