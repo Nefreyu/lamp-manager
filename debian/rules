@@ -15,7 +15,7 @@ override_dh_auto_install:
 	install -m 644 packaging/io.github.nefreyu.LampManager.desktop \
 		debian/lamp-manager/usr/share/applications/
 	install -d debian/lamp-manager/usr/share/icons/hicolor/scalable/apps
-	install -m 644 packaging/icons/hicolor/scalable/apps/io.github.nefreyu.LampManager.svg \
+	install -m 644 packaging/icons/hicolor/scalable/apps/*.svg \
 		debian/lamp-manager/usr/share/icons/hicolor/scalable/apps/
 	install -d debian/lamp-manager/usr/share/metainfo
 	install -m 644 data/io.github.nefreyu.LampManager.metainfo.xml \

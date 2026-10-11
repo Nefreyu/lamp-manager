@@ -10,7 +10,7 @@ lamp-manager (0.2.0) resolute; urgency=medium
   * Logging centralizado con rotación de archivos en ~/.local/share/lamp-manager/.
   * Slugify automático del nombre de vhost con previsualización en tiempo real.
 
- -- Juan Díez <nefreyu.99@gmail.com>  Thu, 05 Jun 2026 00:00:00 +0200
+ -- Juan Díez <nefreyu.99@gmail.com>  Fri, 05 Jun 2026 00:00:00 +0200
 
 lamp-manager (0.1.1) resolute; urgency=medium
 
@@ -21,7 +21,7 @@ lamp-manager (0.1.1) resolute; urgency=medium
   * Efecto hover en filas de servicios y virtual hosts con padding mejorado.
   * Mostrar nombre del autor en el diálogo Acerca de.
 
- -- Juan Díez <nefreyu.99@gmail.com>  Mon, 19 May 2026 00:00:00 +0200
+ -- Juan Díez <nefreyu.99@gmail.com>  Tue, 19 May 2026 00:00:00 +0200
 
 lamp-manager (0.1.0-1) noble; urgency=medium
 
@@ -39,5 +39,5 @@ lamp-manager (0.1.0) noble; urgency=medium
   * Mailpit email testing service integration.
   * Port monitoring and Apache+PHP-FPM warning banner.
 
- -- Juan Díez <nefreyu.99@gmail.com>  Wed, 07 May 2026 10:00:00 +0200
+ -- Juan Díez <nefreyu.99@gmail.com>  Thu, 07 May 2026 10:00:00 +0200
 
