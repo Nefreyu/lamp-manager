@@ -167,6 +167,24 @@ def is_valid_vhost_name(name: str) -> bool:
     return bool(_VHOST_NAME_RE.match(name))
 
 
+def find_vhost_conflict(name: str, exclude: str | None = None) -> str | None:
+    """Vhost existente cuyo nombre coincide con `name` sin distinguir mayúsculas.
+
+    Los dominios no distinguen mayúsculas: demo.test y Demo.test son el mismo,
+    así que dos vhosts así se pisarían en Apache, Nginx y /etc/hosts.
+    """
+    target = name.lower()
+    return next((p for p in list_projects() if p.lower() == target and p != exclude), None)
+
+
+def find_folder_conflict(parent: Path, name: str, exclude: str | None = None) -> Path | None:
+    """Carpeta de `parent` cuyo nombre coincide con `name` sin distinguir mayúsculas."""
+    if not parent.is_dir():
+        return None
+    target = name.lower()
+    return next((d for d in parent.iterdir() if d.name.lower() == target and d.name != exclude), None)
+
+
 def register_orphan(projects_dir: str, folder: str) -> tuple[bool, str, str]:
     """Registra una carpeta sin vhost; si su nombre no es válido la renombra antes al slug.
 
@@ -175,13 +193,15 @@ def register_orphan(projects_dir: str, folder: str) -> tuple[bool, str, str]:
     name = folder if is_valid_vhost_name(folder) else slugify(folder)
     if not name:
         return False, "", f"No se puede obtener un nombre válido a partir de «{folder}»"
+    existing = find_vhost_conflict(name)
+    if existing:
+        return False, name, f"Ya existe un vhost llamado {existing}"
     if name != folder:
         base = Path(projects_dir)
         target = base / name
-        if target.exists():
-            return False, name, f"Ya existe la carpeta {target}"
-        if vhost_config_path(name).exists():
-            return False, name, f"Ya existe un vhost llamado {name}"
+        conflict = find_folder_conflict(base, name, exclude=folder)
+        if conflict:
+            return False, name, f"Ya existe la carpeta {conflict}"
         try:
             (base / folder).rename(target)
         except OSError as e:
@@ -957,6 +977,10 @@ def create_vhost(name: str, projects_dir: str) -> bool:
     if not is_valid_vhost_name(name):
         log.error("Nombre de vhost no válido: %r", name)
         return False
+    existing = find_vhost_conflict(name, exclude=name)
+    if existing:
+        log.error("El vhost %s choca con el existente %s (los dominios no distinguen mayúsculas)", name, existing)
+        return False
     docroot = _detect_docroot(projects_dir, name)
     if not _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, docroot)):
         return False
@@ -1263,10 +1287,12 @@ def restore_vhost(trash_id: str, projects_dir: str) -> tuple[bool, str]:
         project_dir = Path(projects_dir) / name
 
     files_dir = item_dir / "files"
-    if vhost_config_path(name).exists():
-        return False, f"Ya existe un vhost llamado {name}; elimínalo o renómbralo antes de restaurar"
-    if files_dir.exists() and project_dir.exists():
-        return False, f"Ya existe la carpeta {project_dir}; muévela antes de restaurar"
+    existing = find_vhost_conflict(name)
+    if existing:
+        return False, f"Ya existe un vhost llamado {existing}; elimínalo o renómbralo antes de restaurar"
+    folder_conflict = find_folder_conflict(project_dir.parent, project_dir.name) if files_dir.exists() else None
+    if folder_conflict:
+        return False, f"Ya existe la carpeta {folder_conflict}; muévela antes de restaurar"
 
     files_restored = False
     if files_dir.exists():

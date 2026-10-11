@@ -12,7 +12,7 @@ from services.vhosts import (
     is_mkcert_installed, vhost_has_https, enable_https, disable_https,
     FRAMEWORKS, is_command_installed, scaffold_project,
     trash_vhost, slugify, get_project_dir, is_valid_vhost_name, register_orphan,
-    is_inside_projects_dir,
+    is_inside_projects_dir, find_vhost_conflict, find_folder_conflict,
 )
 from services.nginx import get_http_port as get_nginx_http_port, get_https_port as get_nginx_https_port
 from services.apache import get_http_port as get_apache_http_port, get_https_port as get_apache_https_port
@@ -510,20 +510,33 @@ class VHostsPage(Gtk.Box):
             fw = FRAMEWORKS[fw_dropdown.get_selected()]
             return not fw.get("requires") or is_command_installed(fw["requires"])
 
+        def _conflict_message(slug: str) -> str | None:
+            existing = find_vhost_conflict(slug)
+            if existing:
+                return f"Ya existe un proyecto llamado «{existing}»."
+            folder = find_folder_conflict(Path(projects_dir), slug)
+            if folder:
+                return (
+                    f"Ya existe la carpeta {folder}. Si es un proyecto, regístralo "
+                    "desde «Sitios no registrados»."
+                )
+            return None
+
         def _update_create_btn(slug):
-            create_btn.set_sensitive(bool(slug) and not vhost_config_path(slug).exists() and _fw_requires_ok())
+            create_btn.set_sensitive(bool(slug) and _conflict_message(slug) is None and _fw_requires_ok())
 
         def on_name_changed(e):
             slug = slugify(e.get_text())
+            conflict = _conflict_message(slug) if slug else None
             if not e.get_text().strip():
                 slug_label.set_markup("")
                 error_label.set_markup("")
             elif not slug:
                 slug_label.set_markup("")
                 error_label.set_markup("<span color='red'>El nombre no contiene caracteres válidos.</span>")
-            elif vhost_config_path(slug).exists():
+            elif conflict:
                 slug_label.set_markup(f"<span color='gray' size='small'>→ {slug}.test</span>")
-                error_label.set_markup(f"<span color='red'>Ya existe un proyecto llamado '{slug}'.</span>")
+                error_label.set_markup(f"<span color='red'>{GLib.markup_escape_text(conflict)}</span>")
             else:
                 slug_label.set_markup(f"<span color='gray' size='small'>→ {slug}.test</span>")
                 error_label.set_markup("")
@@ -554,8 +567,9 @@ class VHostsPage(Gtk.Box):
             if not name:
                 error_label.set_markup("<span color='red'>El nombre no contiene caracteres válidos.</span>")
                 return
-            if vhost_config_path(name).exists():
-                error_label.set_markup(f"<span color='red'>Ya existe un proyecto llamado '{name}'.</span>")
+            conflict = _conflict_message(name)
+            if conflict:
+                error_label.set_markup(f"<span color='red'>{GLib.markup_escape_text(conflict)}</span>")
                 return
 
             fw = FRAMEWORKS[fw_dropdown.get_selected()]
