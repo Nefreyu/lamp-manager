@@ -158,6 +158,41 @@ def slugify(name: str) -> str:
     return s
 
 
+# Etiqueta DNS: letras, números y guiones, sin guion al principio ni al final.
+# Se admiten mayúsculas porque hay vhosts creados así antes de existir slugify.
+_VHOST_NAME_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
+
+
+def is_valid_vhost_name(name: str) -> bool:
+    return bool(_VHOST_NAME_RE.match(name))
+
+
+def register_orphan(projects_dir: str, folder: str) -> tuple[bool, str, str]:
+    """Registra una carpeta sin vhost; si su nombre no es válido la renombra antes al slug.
+
+    Devuelve (ok, nombre del vhost, mensaje de error).
+    """
+    name = folder if is_valid_vhost_name(folder) else slugify(folder)
+    if not name:
+        return False, "", f"No se puede obtener un nombre válido a partir de «{folder}»"
+    if name != folder:
+        base = Path(projects_dir)
+        target = base / name
+        if target.exists():
+            return False, name, f"Ya existe la carpeta {target}"
+        if vhost_config_path(name).exists():
+            return False, name, f"Ya existe un vhost llamado {name}"
+        try:
+            (base / folder).rename(target)
+        except OSError as e:
+            log.error("No se pudo renombrar %s a %s: %s", folder, name, e)
+            return False, name, f"No se pudo renombrar la carpeta: {e}"
+        log.info("Carpeta %s renombrada a %s para registrarla", folder, name)
+    if not create_vhost(name, projects_dir):
+        return False, name, f"Error al registrar {name}.test"
+    return True, name, ""
+
+
 def list_orphan_folders(projects_dir: str) -> list[str]:
     base = Path(projects_dir)
     if not base.exists():
@@ -881,6 +916,11 @@ def _detect_docroot(projects_dir: str, name: str) -> str:
 
 
 def create_vhost(name: str, projects_dir: str) -> bool:
+    # Un nombre con espacios u otros caracteres genera un ServerName inválido
+    # y Apache entero deja de arrancar
+    if not is_valid_vhost_name(name):
+        log.error("Nombre de vhost no válido: %r", name)
+        return False
     docroot = _detect_docroot(projects_dir, name)
     if not _sudo_write_file(str(vhost_config_path(name)), _vhost_config(name, docroot)):
         return False

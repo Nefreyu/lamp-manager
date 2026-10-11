@@ -11,7 +11,7 @@ from services.vhosts import (
     create_vhost, enable_vhost, disable_vhost,
     is_mkcert_installed, vhost_has_https, enable_https, disable_https,
     FRAMEWORKS, is_command_installed, scaffold_project,
-    trash_vhost, slugify, get_project_dir,
+    trash_vhost, slugify, get_project_dir, is_valid_vhost_name, register_orphan,
 )
 from services.nginx import get_http_port as get_nginx_http_port, get_https_port as get_nginx_https_port
 from services.apache import get_http_port as get_apache_http_port, get_https_port as get_apache_https_port
@@ -225,16 +225,40 @@ class OrphanRow(Gtk.Box):
         icon.set_valign(Gtk.Align.CENTER)
         self.append(icon)
 
+        text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        text_box.set_hexpand(True)
         name_label = Gtk.Label(label=name)
         name_label.set_xalign(0)
-        name_label.set_hexpand(True)
-        self.append(name_label)
+        text_box.append(name_label)
+        self.append(text_box)
 
-        register_btn = Gtk.Button(label="Registrar como vhost")
-        register_btn.add_css_class("suggested-action")
-        register_btn.set_valign(Gtk.Align.CENTER)
-        register_btn.connect("clicked", self._on_register)
-        self.append(register_btn)
+        slug = slugify(name)
+        if is_valid_vhost_name(name):
+            self._button_label = "Registrar como vhost"
+        else:
+            hint = Gtk.Label()
+            hint.set_xalign(0)
+            hint.set_wrap(True)
+            if slug:
+                hint.set_markup(
+                    "<span color='orange' size='small'>El nombre no es válido como dominio; "
+                    f"se renombrará a {GLib.markup_escape_text(slug)}</span>"
+                )
+                self._button_label = f"Renombrar a «{slug}» y registrar"
+            else:
+                hint.set_markup(
+                    "<span color='orange' size='small'>El nombre no es válido como dominio; "
+                    "renombra la carpeta para poder registrarla</span>"
+                )
+                self._button_label = "Registrar como vhost"
+            text_box.append(hint)
+
+        self.register_btn = Gtk.Button(label=self._button_label)
+        self.register_btn.add_css_class("suggested-action")
+        self.register_btn.set_valign(Gtk.Align.CENTER)
+        self.register_btn.set_sensitive(bool(slug) or is_valid_vhost_name(name))
+        self.register_btn.connect("clicked", self._on_register)
+        self.append(self.register_btn)
 
     def _on_register(self, button):
         button.set_sensitive(False)
@@ -242,17 +266,22 @@ class OrphanRow(Gtk.Box):
         projects_dir = settings.get("general", "projects_dir")
 
         def run():
-            ok = create_vhost(self.name, projects_dir)
-            GLib.idle_add(self._finish, ok)
+            result = register_orphan(projects_dir, self.name)
+            GLib.idle_add(self._finish, *result)
 
         threading.Thread(target=run, daemon=True).start()
 
-    def _finish(self, ok):
+    def _finish(self, ok: bool, vhost_name: str, error: str):
         if ok:
-            self.on_status(True, f"Proyecto {self.name}.test registrado correctamente.")
+            self.on_status(True, f"Proyecto {vhost_name}.test registrado correctamente.")
             self.on_registered()
         else:
-            self.on_status(False, f"Error al registrar {self.name}.test.")
+            self.register_btn.set_sensitive(True)
+            self.register_btn.set_label(self._button_label)
+            self.on_status(False, error)
+            # Si la carpeta llegó a renombrarse, la lista debe reflejarlo
+            if vhost_name and vhost_name != self.name:
+                self.on_registered()
 
 
 class VHostsPage(Gtk.Box):
@@ -311,7 +340,7 @@ class VHostsPage(Gtk.Box):
 
     def _set_status(self, success: bool, message: str):
         color = "green" if success else "red"
-        self.status_label.set_markup(f"<span color='{color}'>{message}</span>")
+        self.status_label.set_markup(f"<span color='{color}'>{GLib.markup_escape_text(message)}</span>")
         if success:
             GLib.timeout_add_seconds(15, lambda: self.status_label.set_markup("") or False)
 
