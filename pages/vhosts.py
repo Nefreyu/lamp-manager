@@ -196,14 +196,22 @@ class VHostRow(Gtk.Box):
             self.https_button.set_sensitive(False)
             self.delete_btn.set_sensitive(False)
 
+            projects_dir = settings.get("general", "projects_dir")
+
             def run():
-                ok = trash_vhost(self.name)
+                ok, warning = trash_vhost(self.name, projects_dir)
                 if ok:
-                    GLib.idle_add(self.on_deleted)
+                    GLib.idle_add(self._after_trash_ok, warning)
                 else:
                     GLib.idle_add(self._after_trash_error)
 
             threading.Thread(target=run, daemon=True).start()
+
+    def _after_trash_ok(self, warning: str):
+        # on_status antes de on_deleted: on_deleted recarga la lista y destruye esta fila
+        if warning:
+            self.on_status(True, f"{self.name}.test movido a la papelera. {warning}", warning=True)
+        self.on_deleted()
 
     def _after_trash_error(self):
         self.switch.set_sensitive(True)
@@ -327,7 +335,9 @@ class VHostsPage(Gtk.Box):
 
         self.status_label = Gtk.Label(label="")
         self.status_label.set_xalign(0)
+        self.status_label.set_wrap(True)
         self.append(self.status_label)
+        self._status_timeout_id: int | None = None
 
         self.list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.append(self.list_box)
@@ -338,11 +348,26 @@ class VHostsPage(Gtk.Box):
         self.connect("map", lambda *_: self._load_projects())
         self._load_projects()
 
-    def _set_status(self, success: bool, message: str):
-        color = "green" if success else "red"
+    def _set_status(self, success: bool, message: str, warning: bool = False):
+        """Éxito: verde, 15 s. Aviso: naranja, 10 s. Error: rojo, hasta el siguiente mensaje."""
+        if warning:
+            color, clear_after = "orange", 10
+        elif success:
+            color, clear_after = "green", 15
+        else:
+            color, clear_after = "red", None
         self.status_label.set_markup(f"<span color='{color}'>{GLib.markup_escape_text(message)}</span>")
-        if success:
-            GLib.timeout_add_seconds(15, lambda: self.status_label.set_markup("") or False)
+        # Un temporizador pendiente de un mensaje anterior no debe borrar este
+        if self._status_timeout_id is not None:
+            GLib.source_remove(self._status_timeout_id)
+            self._status_timeout_id = None
+        if clear_after is not None:
+            self._status_timeout_id = GLib.timeout_add_seconds(clear_after, self._clear_status)
+
+    def _clear_status(self) -> bool:
+        self.status_label.set_markup("")
+        self._status_timeout_id = None
+        return False
 
     def refresh(self):
         self._load_projects()

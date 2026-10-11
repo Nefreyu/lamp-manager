@@ -220,7 +220,23 @@ def get_service_ports(process: str) -> list[int]:
     return sorted(ports)
 
 
+_CLEARABLE_LOG_DIRS = (Path("/var/log/apache2"), Path("/var/log/nginx"), Path("/var/log/mysql"))
+_PHP_FPM_LOG_RE = re.compile(r"php\d+\.\d+-fpm\.log")
+
+
+def is_clearable_log(path: str) -> bool:
+    """Solo se vacían logs de los servicios gestionados: la ruta sale de una
+    config editable a mano y `truncate` con sudo destruye cualquier fichero."""
+    target = Path(path).resolve()
+    if any(target != d and target.is_relative_to(d) for d in _CLEARABLE_LOG_DIRS):
+        return True
+    return target.parent == Path("/var/log") and bool(_PHP_FPM_LOG_RE.fullmatch(target.name))
+
+
 def clear_log(path: str) -> bool:
+    if not is_clearable_log(path):
+        log.warning("Se ha rechazado vaciar un fichero fuera de los logs gestionados: %s", path)
+        return False
     return _run_sudo(["truncate", "-s", "0", path])
 
 

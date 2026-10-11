@@ -968,22 +968,6 @@ def drop_database(name: str) -> bool:
     return _run_sudo(["mysql", "-e", f"DROP DATABASE IF EXISTS `{name}`"])
 
 
-def delete_vhost(name: str, projects_dir: str) -> bool:
-    _run_sudo(["a2dissite", f"{name}.test.conf"])
-    _run_sudo(["rm", "-f", str(vhost_config_path(name))])
-    remove_hosts_entry(f"{name}.test")
-    _run_sudo(["systemctl", "reload", "apache2"])
-    nginx.disable_site(f"{name}.test.conf")
-    nginx.remove_vhost_config(name)
-    nginx.reload()
-    project_dir = Path(projects_dir) / name
-    if project_dir.exists():
-        _run_sudo(["rm", "-rf", str(project_dir)])
-    disable_https(name)
-    generate_index_page()
-    return True
-
-
 def enable_vhost(name: str) -> bool:
     if not add_hosts_entry(f"{name}.test"):
         return False
@@ -1122,12 +1106,33 @@ def rename_project(name: str, new_docroot: str, src: Path, dst: Path) -> tuple[b
     return False, error
 
 
-def trash_vhost(name: str) -> bool:
+def is_inside_projects_dir(path: Path | None, projects_dir: str) -> bool:
+    """Indica si `path` está dentro del directorio de proyectos, sin ser el propio directorio."""
+    if path is None:
+        return False
+    base = Path(projects_dir).resolve()
+    target = path.resolve()
+    return target != base and target.is_relative_to(base)
+
+
+def trash_vhost(name: str, projects_dir: str) -> tuple[bool, str]:
+    """Mueve el vhost a la papelera. Devuelve (ok, aviso para el usuario)."""
     trash_id = f"{name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     item_dir = TRASH_DIR / trash_id
     item_dir.mkdir(parents=True, exist_ok=True)
 
     project_dir = _project_dir_from_docroot(get_docroot(name))
+    # El DocumentRoot se puede editar a mano: si apunta fuera del directorio de
+    # proyectos (o al propio directorio), mover su carpeta con sudo se llevaría
+    # por delante cosas que no son del proyecto
+    move_files = project_dir is not None and project_dir.exists() and is_inside_projects_dir(project_dir, projects_dir)
+    warning = ""
+    if project_dir is not None and project_dir.exists() and not move_files:
+        warning = (
+            f"La carpeta {project_dir} no se ha movido a la papelera porque está "
+            f"fuera del directorio de proyectos ({projects_dir})."
+        )
+        log.warning("trash_vhost(%s): %s", name, warning)
 
     meta = {
         "trash_id": trash_id,
@@ -1135,6 +1140,7 @@ def trash_vhost(name: str) -> bool:
         "project_dir": str(project_dir) if project_dir else None,
         "deleted_at": datetime.now().isoformat(),
         "has_db": False,
+        "files_moved": move_files,
     }
 
     config_content = _run_sudo_output(["cat", str(vhost_config_path(name))])
@@ -1171,7 +1177,7 @@ def trash_vhost(name: str) -> bool:
                 (certs_bak / f.name).write_bytes(f.read_bytes())
                 f.unlink()
 
-    if project_dir and project_dir.exists():
+    if move_files:
         _run_sudo(["mv", str(project_dir), str(item_dir / "files")])
 
     logs_bak = item_dir / "logs"
@@ -1184,7 +1190,7 @@ def trash_vhost(name: str) -> bool:
 
     (item_dir / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False))
     generate_index_page()
-    return True
+    return True, warning
 
 
 def list_trash() -> list[dict]:
@@ -1201,24 +1207,35 @@ def list_trash() -> list[dict]:
     return sorted(items, key=lambda x: x.get("deleted_at", ""), reverse=True)
 
 
-def restore_vhost(trash_id: str) -> bool:
+def restore_vhost(trash_id: str, projects_dir: str) -> tuple[bool, str]:
+    """Restaura un vhost de la papelera. Devuelve (ok, mensaje de error)."""
     item_dir = TRASH_DIR / trash_id
     meta_path = item_dir / "meta.json"
     if not meta_path.exists():
-        return False
+        return False, "El elemento ya no está en la papelera"
 
-    meta = json.loads(meta_path.read_text())
-    name = meta["name"]
+    try:
+        meta = json.loads(meta_path.read_text())
+        name = meta["name"]
+    except (OSError, ValueError, KeyError) as e:
+        log.error("Metadatos de papelera inválidos en %s: %s", meta_path, e)
+        return False, "Los datos de este elemento de la papelera están dañados"
 
     if meta.get("project_dir"):
         project_dir = Path(meta["project_dir"])
     else:
-        project_dir = Path(meta["projects_dir"]) / name
+        project_dir = Path(projects_dir) / name
 
     files_dir = item_dir / "files"
+    if vhost_config_path(name).exists():
+        return False, f"Ya existe un vhost llamado {name}; elimínalo o renómbralo antes de restaurar"
+    if files_dir.exists() and project_dir.exists():
+        return False, f"Ya existe la carpeta {project_dir}; muévela antes de restaurar"
+
+    files_restored = False
     if files_dir.exists():
         project_dir.parent.mkdir(parents=True, exist_ok=True)
-        _run_sudo(["mv", str(files_dir), str(project_dir)])
+        files_restored = _run_sudo(["mv", str(files_dir), str(project_dir)])
 
     certs_bak = item_dir / "certs"
     if certs_bak.exists():
@@ -1244,7 +1261,9 @@ def restore_vhost(trash_id: str) -> bool:
     nginx.enable_site(f"{name}.test.conf")
     nginx.reload()
 
-    if project_dir.exists():
+    # Solo se ajustan permisos si se han devuelto archivos: si la carpeta nunca
+    # se movió a la papelera, project_dir puede ser una ruta ajena al proyecto
+    if files_restored:
         user = getpass.getuser()
         _run_sudo(["chown", "-R", f"{user}:www-data", str(project_dir)])
         _run_sudo(["chmod", "-R", "ug+rwX", str(project_dir)])
@@ -1256,7 +1275,7 @@ def restore_vhost(trash_id: str) -> bool:
 
     _run_sudo(["rm", "-rf", str(item_dir)])
     generate_index_page()
-    return True
+    return True, ""
 
 
 def purge_trash_item(trash_id: str) -> bool:
