@@ -5,6 +5,7 @@ from gi.repository import Gtk, GLib
 
 import threading
 from datetime import datetime
+from config import settings
 from services.vhosts import list_trash, restore_vhost, purge_trash_item, purge_all_trash
 
 log = logging.getLogger(__name__)
@@ -120,6 +121,8 @@ class VHostTrashPage(Gtk.Box):
         badges = []
         if meta.get("has_db"):
             badges.append("BD")
+        if meta.get("files_moved") is False:
+            badges.append("sin archivos")
         badge_str = f"  ·  {' · '.join(badges)}" if badges else ""
         date_label = Gtk.Label()
         date_label.set_markup(f"<span color='gray' size='small'>{date_str}{badge_str}</span>")
@@ -148,18 +151,20 @@ class VHostTrashPage(Gtk.Box):
         restore_btn.set_sensitive(False)
         restore_btn.set_label("Restaurando…")
 
+        projects_dir = settings.get("general", "projects_dir")
+
         def run():
-            ok = restore_vhost(meta["trash_id"])
-            GLib.idle_add(self._after_restore, ok, meta["name"])
+            ok, error = restore_vhost(meta["trash_id"], projects_dir)
+            GLib.idle_add(self._after_restore, ok, meta["name"], error)
 
         threading.Thread(target=run, daemon=True).start()
 
-    def _after_restore(self, ok: bool, name: str):
+    def _after_restore(self, ok: bool, name: str, error: str):
         if ok:
             self._navigate_to("vhosts")
         else:
-            self._set_status(False, f"Error al restaurar {name}.test.")
             self.refresh()
+            self._set_status(False, f"Error al restaurar {name}.test: {error}")
 
     def _on_purge(self, button, meta):
         dialog = Gtk.AlertDialog()
@@ -184,5 +189,5 @@ class VHostTrashPage(Gtk.Box):
 
     def _set_status(self, success: bool, message: str):
         color = "green" if success else "red"
-        self.status_label.set_markup(f"<span color='{color}'>{message}</span>")
+        self.status_label.set_markup(f"<span color='{color}'>{GLib.markup_escape_text(message)}</span>")
         GLib.timeout_add_seconds(5, lambda: self.status_label.set_markup("") or False)

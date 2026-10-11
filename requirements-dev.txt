@@ -1,0 +1,4 @@
+# Dependencias de desarrollo; la aplicación solo usa paquetes del sistema.
+# Instalar en un venv creado con --system-site-packages:
+#   pip install -r requirements-dev.txt
+pytest>=9

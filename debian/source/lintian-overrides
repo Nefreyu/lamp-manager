@@ -1,0 +1,3 @@
+# composer no se usa para construir el paquete: es una sugerencia de uso,
+# necesaria para crear proyectos Laravel y Symfony desde la aplicación.
+lamp-manager source: composer-prerequisite Suggests *

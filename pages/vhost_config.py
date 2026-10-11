@@ -2,8 +2,14 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, GLib
 
-from services.vhosts import get_docroot, update_docroot, vhost_config_path, get_vhost_log_paths, ensure_vhost_logs
-from services.systemd import _run_sudo_output, _sudo_write_file
+from pathlib import Path
+
+from config import settings
+from services.vhosts import (
+    get_docroot, update_docroot, vhost_config_path, get_vhost_log_paths, ensure_vhost_logs,
+    plan_project_rename, rename_project, save_vhost_config, docroot_location_error,
+)
+from services.systemd import _run_sudo_output
 from pages.log_viewer import LogViewer
 
 
@@ -54,7 +60,10 @@ class VHostConfigPage(Gtk.Box):
 
         self.status_label = Gtk.Label(label="")
         self.status_label.set_xalign(0)
+        self.status_label.set_wrap(True)
+        self.status_label.set_selectable(True)
         self.append(self.status_label)
+        self._status_timeout_id: int | None = None
 
         self.append(Gtk.Separator())
 
@@ -78,12 +87,13 @@ class VHostConfigPage(Gtk.Box):
         scrolled.set_child(self.raw_view)
         config_box.append(scrolled)
 
+        notebook.append_page(config_box, Gtk.Label(label="Configuración"))
+
         save_raw_btn = Gtk.Button(label="Guardar configuración")
+        save_raw_btn.add_css_class("suggested-action")
         save_raw_btn.set_halign(Gtk.Align.START)
         save_raw_btn.connect("clicked", self.on_save_raw)
-        config_box.append(save_raw_btn)
-
-        notebook.append_page(config_box, Gtk.Label(label="Configuración"))
+        self.append(save_raw_btn)
 
         # ── Pestaña Log de errores ──
         self._error_log_viewer = LogViewer("/dev/null")
@@ -97,7 +107,7 @@ class VHostConfigPage(Gtk.Box):
 
     def load(self, name: str):
         self._name = name
-        self.title.set_markup(f"<span size='x-large' weight='bold'>{name}.test</span>")
+        self.title.set_markup(f"<span size='x-large' weight='bold'>{GLib.markup_escape_text(name)}.test</span>")
         ensure_vhost_logs(name)
         self.docroot_entry.set_text(get_docroot(name))
         content = _run_sudo_output(["cat", str(vhost_config_path(name))]) or ""
@@ -125,24 +135,75 @@ class VHostConfigPage(Gtk.Box):
         if not new_docroot:
             self._show_status(False, "El DocumentRoot no puede estar vacío")
             return
-        ok = update_docroot(self._name, new_docroot)
+        projects_dir = settings.get("general", "projects_dir")
+        location_error = docroot_location_error(new_docroot, projects_dir)
+        if location_error:
+            self._show_status(False, location_error)
+            return
+        if Path(new_docroot).is_dir():
+            ok, error = update_docroot(self._name, new_docroot, projects_dir)
+            if ok:
+                self.load(self._name)
+                self._show_status(True, "DocumentRoot actualizado correctamente")
+            else:
+                self._show_status(False, f"Error al actualizar el DocumentRoot:\n{error}")
+            return
+
+        rename = plan_project_rename(self._name, new_docroot, projects_dir)
+        if rename is None:
+            self._show_status(False, f"El directorio {new_docroot} no existe")
+            return
+        src, dst = rename
+        dialog = Gtk.AlertDialog()
+        dialog.set_message("¿Renombrar la carpeta del proyecto?")
+        dialog.set_detail(
+            f"La carpeta {dst.name} no existe.\n\n"
+            f"Se renombrará {src} a {dst} y se actualizarán Apache y Nginx. "
+            f"El dominio {self._name}.test no cambia."
+        )
+        dialog.set_buttons(["Cancelar", "Renombrar"])
+        dialog.set_default_button(0)
+        dialog.set_cancel_button(0)
+        dialog.choose(
+            self.get_root(), None,
+            lambda d, r: self._on_rename_confirmed(d, r, new_docroot, src, dst),
+        )
+
+    def _on_rename_confirmed(self, dialog, result, new_docroot: str, src: Path, dst: Path):
+        try:
+            if dialog.choose_finish(result) != 1:
+                return
+        except GLib.Error:
+            return
+        ok, error = rename_project(self._name, new_docroot, src, dst, settings.get("general", "projects_dir"))
+        self.load(self._name)
         if ok:
-            self.load(self._name)
-            self._show_status(True, "DocumentRoot actualizado correctamente")
+            self._show_status(True, f"Carpeta renombrada a {dst.name} y DocumentRoot actualizado")
         else:
-            self._show_status(False, "Error al actualizar el DocumentRoot")
+            self._show_status(False, f"Error al renombrar la carpeta; se ha dejado como estaba:\n{error}")
 
     def on_save_raw(self, button):
         buf = self.raw_view.get_buffer()
         content = buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False)
-        ok = _sudo_write_file(str(vhost_config_path(self._name)), content)
+        ok, error = save_vhost_config(self._name, content, settings.get("general", "projects_dir"))
         if ok:
             self.load(self._name)
-            self._show_status(True, "Configuración guardada correctamente")
+            self._show_status(True, "Configuración guardada y Apache recargado")
         else:
-            self._show_status(False, "Error al guardar la configuración")
+            # No se recarga el editor: así el usuario conserva su texto para corregirlo
+            self._show_status(False, f"No se ha guardado.\n{error}")
 
     def _show_status(self, success: bool, message: str):
         color = "green" if success else "red"
-        self.status_label.set_markup(f"<span color='{color}'>{message}</span>")
-        GLib.timeout_add_seconds(3, lambda: self.status_label.set_markup("") or False)
+        self.status_label.set_markup(f"<span color='{color}'>{GLib.markup_escape_text(message)}</span>")
+        if self._status_timeout_id is not None:
+            GLib.source_remove(self._status_timeout_id)
+            self._status_timeout_id = None
+        # Los errores se quedan visibles hasta la siguiente acción
+        if success:
+            self._status_timeout_id = GLib.timeout_add_seconds(5, self._clear_status)
+
+    def _clear_status(self) -> bool:
+        self.status_label.set_markup("")
+        self._status_timeout_id = None
+        return False

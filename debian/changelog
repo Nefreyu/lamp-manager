@@ -1,3 +1,39 @@
+lamp-manager (0.3.0) resolute; urgency=medium
+
+  [ Novedades ]
+  * Nginx como servidor web en paralelo a Apache (puertos 8080/8443): cada
+    vhost se sirve también por Nginx con su propio log.
+  * Puertos de Apache y Nginx configurables desde Ajustes.
+  * Dashboard de localhost rediseñado: tarjetas por proyecto con framework,
+    rama de git, tamaño, errores recientes y accesos a las herramientas.
+    Se regenera al cambiar de rama, de DocumentRoot o el HTTPS de un vhost.
+  * Detección de carpetas sin vhost en el directorio de proyectos, con opción
+    de registrarlas (renombrándolas al slug si su nombre no es válido).
+  * Cambiar el DocumentRoot a una carpeta inexistente ofrece renombrar la
+    carpeta del proyecto.
+  * Los proyectos "PHP básico" se crean con un index.php inicial.
+
+  [ Seguridad y robustez ]
+  * La configuración de Apache se valida con configtest antes de recargar y
+    se revierte si no es válida.
+  * El DocumentRoot debe estar dentro del directorio de proyectos; los vhosts
+    que quedan fuera se señalan en la lista.
+  * La papelera no mueve carpetas fuera del directorio de proyectos y solo se
+    vacían logs de los servicios gestionados.
+  * /etc/hosts se edita por nombre de host exacto y solo en líneas propias.
+  * No se permiten vhosts ni carpetas que solo difieran en mayúsculas.
+  * Se escapan los datos dinámicos en la interfaz y en el dashboard.
+
+  [ Correcciones ]
+  * El arranque con --autostart terminaba con error; relanzar la aplicación
+    ya no duplica la ventana ni el icono de la bandeja.
+  * Los ficheros de configuración se escriben con permisos 0644; se corrigen
+    los creados en 0600, que impedían guardar el DocumentRoot.
+  * El paquete instala los iconos de estado del tray, depende de
+    gir1.2-dbusmenu-glib-0.4 y ya no falla al instalarse sin terminal.
+
+ -- Juan Díez <nefreyu.99@gmail.com>  Sun, 11 Oct 2026 21:39:43 +0200
+
 lamp-manager (0.2.0) resolute; urgency=medium
 
   * Icono del tray dinámico: azul (todo activo), naranja (algún servicio parado), rojo (todos parados).
@@ -10,7 +46,7 @@ lamp-manager (0.2.0) resolute; urgency=medium
   * Logging centralizado con rotación de archivos en ~/.local/share/lamp-manager/.
   * Slugify automático del nombre de vhost con previsualización en tiempo real.
 
- -- Juan Díez <nefreyu.99@gmail.com>  Thu, 05 Jun 2026 00:00:00 +0200
+ -- Juan Díez <nefreyu.99@gmail.com>  Fri, 05 Jun 2026 00:00:00 +0200
 
 lamp-manager (0.1.1) resolute; urgency=medium
 
@@ -21,7 +57,7 @@ lamp-manager (0.1.1) resolute; urgency=medium
   * Efecto hover en filas de servicios y virtual hosts con padding mejorado.
   * Mostrar nombre del autor en el diálogo Acerca de.
 
- -- Juan Díez <nefreyu.99@gmail.com>  Mon, 19 May 2026 00:00:00 +0200
+ -- Juan Díez <nefreyu.99@gmail.com>  Tue, 19 May 2026 00:00:00 +0200
 
 lamp-manager (0.1.0-1) noble; urgency=medium
 
@@ -39,5 +75,4 @@ lamp-manager (0.1.0) noble; urgency=medium
   * Mailpit email testing service integration.
   * Port monitoring and Apache+PHP-FPM warning banner.
 
- -- Juan Díez <nefreyu.99@gmail.com>  Wed, 07 May 2026 10:00:00 +0200
-
+ -- Juan Díez <nefreyu.99@gmail.com>  Thu, 07 May 2026 10:00:00 +0200

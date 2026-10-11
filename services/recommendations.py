@@ -11,6 +11,15 @@ RECOMMENDATIONS = [
         ],
     },
     {
+        "id": "nginx",
+        "label": "Nginx",
+        "description": "Servidor web adicional que sirve los mismos proyectos en los puertos 8080/8443, en paralelo a Apache.",
+        "checks": ["/usr/sbin/nginx"],
+        "commands": [
+            {"label": "Nginx", "cmd": "sudo apt install nginx"},
+        ],
+    },
+    {
         "id": "php-fpm",
         "label": "PHP-FPM",
         "description": "Procesador PHP necesario para ejecutar aplicaciones web.",

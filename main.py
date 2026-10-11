@@ -6,6 +6,7 @@ from pathlib import Path
 
 from config import log as _log_setup
 _log_setup.setup()
+log = logging.getLogger(__name__)
 
 try:
     from config.dev import DEV_MODE, SKIP_PASSWORD_DIALOG
@@ -24,31 +25,23 @@ if _icon_src.exists():
     _hicolor = Path.home() / ".local/share/icons/hicolor"
     _icons_dst_dir = _hicolor / "scalable/apps"
     _icons_dst_dir.mkdir(parents=True, exist_ok=True)
+    # NO escribir un index.theme propio aquí: el index.theme del sistema
+    # (/usr/share/icons/hicolor) ya declara scalable/apps, así que estos SVG se
+    # encuentran sin él. Un index.theme de usuario con Directories= incompleto
+    # ensombrece al del sistema y rompe la resolución de tamaños de TODOS los
+    # iconos (pixelado en el menú de GNOME).
     _new_icons = False
     for _svg in (_icon_src.parent).glob("*.svg"):
         _dst = _icons_dst_dir / _svg.name
         if not _dst.exists():
             _dst.symlink_to(_svg.resolve())
             _new_icons = True
-    _icon_dst = _icons_dst_dir / "io.github.nefreyu.LampManager.svg"
-    _index = _hicolor / "index.theme"
-    _content = _index.read_text() if _index.exists() else ""
-    if "scalable/apps" not in _content:
-        if "Directories=" in _content:
-            _content = _content.replace(
-                next(l for l in _content.splitlines() if l.startswith("Directories=")),
-                next(l for l in _content.splitlines() if l.startswith("Directories=")) + ",scalable/apps"
-            )
-            _content = _content.rstrip() + "\n\n[scalable/apps]\nSize=48\nType=Scalable\nMinSize=1\nMaxSize=256\n"
-        else:
-            _content = (
-                "[Icon Theme]\nName=Hicolor\nComment=Hicolor icon theme\nDirectories=scalable/apps\n\n"
-                "[scalable/apps]\nSize=48\nType=Scalable\nMinSize=1\nMaxSize=256\n"
-            )
-        _index.write_text(_content)
-        _new_icons = True
     if _new_icons:
-        subprocess.run(["gtk-update-icon-cache", "-f", str(_hicolor)], capture_output=True)
+        # --ignore-theme-index: refresca la caché sin requerir ni crear index.theme
+        subprocess.run(
+            ["gtk-update-icon-cache", "-f", "-t", "--ignore-theme-index", str(_hicolor)],
+            capture_output=True,
+        )
 
 # Instalar .desktop en ~/.local/share/applications/ si se ejecuta desde el directorio de desarrollo
 _desktop_src = Path(__file__).parent / "packaging/io.github.nefreyu.LampManager.desktop"
@@ -78,6 +71,7 @@ GLib.set_application_name("LAMP Manager")
 from windows.main_window import MainWindow
 from windows.splash_window import SplashWindow
 from services.tray import SystemTray
+from services.watcher import ProjectWatcher
 from services.keyring import get_sudo_password
 from services.systemd import validate_password, set_password
 
@@ -85,10 +79,37 @@ from services.systemd import validate_password, set_password
 class App(Adw.Application):
     def __init__(self):
         super().__init__(application_id="io.github.nefreyu.LampManager")
+        self._autostart = False
+        self._window: MainWindow | None = None
+        self._tray: SystemTray | None = None
+        self.add_main_option(
+            "autostart", 0, GLib.OptionFlags.NONE, GLib.OptionArg.NONE,
+            "Arrancar en segundo plano en el área de notificación", None,
+        )
+        self.connect("handle-local-options", self.on_handle_local_options)
         self.connect("activate", self.on_activate)
 
+    def on_handle_local_options(self, app, options: GLib.VariantDict) -> int:
+        self._autostart = options.contains("autostart")
+        if self._autostart:
+            # Si ya hay una instancia en marcha, un --autostart tardío no debe
+            # sacar su ventana: se termina sin enviarle "activate".
+            try:
+                self.register(None)
+            except GLib.Error as e:
+                log.warning("No se pudo registrar la aplicación: %s", e)
+            if self.get_is_remote():
+                return 0
+        return -1
+
     def on_activate(self, app):
-        self._autostart = "--autostart" in sys.argv
+        # GApplication es de instancia única: relanzar la app reenvía "activate"
+        # a la instancia en marcha, que solo debe mostrar su ventana.
+        if self._window is not None:
+            self._window.present()
+            if self._tray is not None:
+                self._tray.set_window_visible(True)
+            return
         self._window = MainWindow(self)
         self._splash = SplashWindow(app)
         self._splash.present()
@@ -114,6 +135,9 @@ class App(Adw.Application):
         stored = get_sudo_password()
         if stored and validate_password(stored):
             set_password(stored)
+            import threading
+            from services.vhosts import sync_nginx
+            threading.Thread(target=sync_nginx, daemon=True).start()
             self._setup_tray(window_visible=False)
         else:
             self._window.present()
@@ -128,10 +152,12 @@ class App(Adw.Application):
             self._tray.set_window_visible(self._window.is_visible())
         self._tray = SystemTray(_toggle, self.quit)
         self._tray.start()
+        self._watcher = ProjectWatcher()
+        self._watcher.start()
         self._window.connect("hide", lambda *_: self._tray.set_window_visible(False))
         self._tray.set_window_visible(window_visible)
             
 
 if __name__ == "__main__":
     app = App()
-    app.run()
+    app.run(sys.argv)

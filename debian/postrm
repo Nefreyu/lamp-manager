@@ -1,12 +1,9 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
+# Restos de __pycache__ generados en tiempo de ejecución, que dpkg no conoce
 if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
     rm -rf /usr/lib/lamp-manager
-    if command -v update-desktop-database > /dev/null; then
-        update-desktop-database /usr/share/applications
-    fi
-    if command -v gtk-update-icon-cache > /dev/null; then
-        gtk-update-icon-cache -f /usr/share/icons/hicolor
-    fi
 fi
+
+#DEBHELPER#

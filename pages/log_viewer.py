@@ -41,7 +41,7 @@ class LogViewer(Gtk.Box):
         header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
 
         self._path_label = Gtk.Label()
-        self._path_label.set_markup(f"<span size='small' color='gray'>{path}</span>")
+        self._path_label.set_markup(f"<span size='small' color='gray'>{GLib.markup_escape_text(path)}</span>")
         self._path_label.set_xalign(0)
         self._path_label.set_hexpand(True)
         header.append(self._path_label)
@@ -100,7 +100,7 @@ class LogViewer(Gtk.Box):
 
     def set_path(self, path: str):
         self._path = path
-        self._path_label.set_markup(f"<span size='small' color='gray'>{path}</span>")
+        self._path_label.set_markup(f"<span size='small' color='gray'>{GLib.markup_escape_text(path)}</span>")
         self._last_content = None
         self._load()
 

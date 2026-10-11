@@ -1,7 +1,7 @@
 import gi
 import logging
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk, Gio
+from gi.repository import Gtk, Gio, GLib
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ class PhpMyAdminConfigPage(Gtk.Box):
 
         url = service.get("url", "http://localhost/phpmyadmin")
         url_label = Gtk.Label()
-        url_label.set_markup(f"<span color='gray' size='small'>{url}</span>")
+        url_label.set_markup(f"<span color='gray' size='small'>{GLib.markup_escape_text(url)}</span>")
         url_label.set_xalign(0)
         self.append(url_label)
 
@@ -65,7 +65,7 @@ class PhpMyAdminConfigPage(Gtk.Box):
         row.append(name_label)
 
         path_label = Gtk.Label()
-        path_label.set_markup(f"<span color='gray' size='small'>{path}</span>")
+        path_label.set_markup(f"<span color='gray' size='small'>{GLib.markup_escape_text(path)}</span>")
         row.append(path_label)
 
         btn = Gtk.Button()

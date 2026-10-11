@@ -14,7 +14,15 @@ DEFAULTS = {
     "general": {
         "projects_dir": str(Path.home() / "www"),
         "minimize_to_tray": "true",
-    }
+    },
+    "apache": {
+        "http_port": "80",
+        "https_port": "443",
+    },
+    "nginx": {
+        "http_port": "8080",
+        "https_port": "8443",
+    },
 }
 
 

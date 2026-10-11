@@ -140,7 +140,7 @@ class UserRow(Gtk.ListBoxRow):
 
         db_text = ", ".join(databases) if databases else "Sin acceso a bases de datos"
         db_label = Gtk.Label()
-        db_label.set_markup(f"<span size='small' color='gray'>{db_text}</span>")
+        db_label.set_markup(f"<span size='small' color='gray'>{GLib.markup_escape_text(db_text)}</span>")
         db_label.set_xalign(0)
         text_box.append(db_label)
 
@@ -347,13 +347,13 @@ class MysqlConfigPage(Gtk.Box):
 
     def _show_db_status(self, success: bool, message: str):
         color = "green" if success else "red"
-        self._db_status.set_markup(f"<span color='{color}'>{message}</span>")
+        self._db_status.set_markup(f"<span color='{color}'>{GLib.markup_escape_text(message)}</span>")
         if success:
             GLib.timeout_add_seconds(4, lambda: self._db_status.set_markup("") or False)
 
     def _show_user_status(self, success: bool, message: str):
         color = "green" if success else "red"
-        self._user_status.set_markup(f"<span color='{color}'>{message}</span>")
+        self._user_status.set_markup(f"<span color='{color}'>{GLib.markup_escape_text(message)}</span>")
         if success:
             GLib.timeout_add_seconds(4, lambda: self._user_status.set_markup("") or False)
 
@@ -366,7 +366,7 @@ class MysqlConfigPage(Gtk.Box):
         row.append(name_label)
 
         path_label = Gtk.Label()
-        path_label.set_markup(f"<span color='gray' size='small'>{path}</span>")
+        path_label.set_markup(f"<span color='gray' size='small'>{GLib.markup_escape_text(path)}</span>")
         row.append(path_label)
 
         btn = Gtk.Button()

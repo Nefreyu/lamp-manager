@@ -6,6 +6,7 @@ from gi.repository import Gtk, GLib, Gio, Adw
 from pages.servicios import ServiciosPage, ServiceConfigPage
 from pages.mailpit_config import MailpitConfigPage
 from pages.apache_config import ApacheConfigPage
+from pages.nginx_config import NginxConfigPage
 from pages.mysql_config import MysqlConfigPage
 from pages.php_config import PhpConfigPage
 from pages.phpmyadmin_config import PhpMyAdminConfigPage
@@ -138,6 +139,7 @@ class MainWindow(Adw.ApplicationWindow):
         config_pages = {
             "mailpit":    MailpitConfigPage,
             "apache2":    ApacheConfigPage,
+            "nginx":      NginxConfigPage,
             "mysql":      MysqlConfigPage,
             "phpmyadmin": PhpMyAdminConfigPage,
         }
@@ -228,6 +230,7 @@ class MainWindow(Adw.ApplicationWindow):
         stored = get_sudo_password()
         if stored and validate_password(stored):
             set_password(stored)
+            self._sync_nginx_background()
             return
         self.dialog = PasswordDialog(self, self.on_password_success, self.on_password_cancel)
         self.dialog.present()
@@ -236,10 +239,16 @@ class MainWindow(Adw.ApplicationWindow):
         set_password(password)
         save_sudo_password(password)
         self.dialog.close()
+        self._sync_nginx_background()
 
     def on_password_cancel(self):
         self.dialog.close()
         self.close()
+
+    def _sync_nginx_background(self):
+        import threading
+        from services.vhosts import sync_nginx
+        threading.Thread(target=sync_nginx, daemon=True).start()
 
     def on_about(self, action, param):
         from config.version import __version__

@@ -30,6 +30,7 @@ _PHP_ENTRY = _detect_php_entry()
 
 SERVICES = [
     {"id": "apache2",    "label": "Apache",    "optional": False, "binary": "/usr/sbin/apache2",             "url": "http://localhost", "reloadable": True, "process": "apache2"},
+    {"id": "nginx",      "label": "Nginx",     "optional": False, "binary": "/usr/sbin/nginx",                "url": "http://localhost:8080", "reloadable": True, "process": "nginx"},
     {"id": "mysql",      "label": "MySQL",     "optional": False, "binary": "/usr/sbin/mysqld",                                                               "restartable": True, "process": "mysqld"},
     _PHP_ENTRY,
     {"id": "phpmyadmin", "label": "phpMyAdmin","optional": False, "binary": "/usr/share/phpmyadmin/index.php","url": "http://localhost/phpmyadmin", "web_only": True},
@@ -100,13 +101,17 @@ def _run_sudo_feed(command: list, data: str) -> bool:
                     log.warning("No se pudo eliminar el archivo temporal %s: %s", path, e)
 
 
-def _sudo_write_file(dest_path: str, content: str) -> bool:
-    """Escribe contenido en un archivo privilegiado usando un fichero temporal."""
+def _sudo_write_file(dest_path: str, content: str, mode: str = "0644") -> bool:
+    """Escribe contenido en un archivo privilegiado usando un fichero temporal.
+
+    Se usa `install -m` y no `cp`: el temporal se crea con permisos 0600 y `cp`
+    los heredaba en los ficheros nuevos, dejándolos ilegibles sin sudo.
+    """
     with tempfile.NamedTemporaryFile(mode="w", suffix=".lamp-manager", delete=False) as f:
         f.write(content)
         tmp_path = f.name
     try:
-        return _run_sudo(["cp", tmp_path, dest_path])
+        return _run_sudo(["install", "-m", mode, tmp_path, dest_path])
     finally:
         os.unlink(tmp_path)
 
@@ -215,7 +220,23 @@ def get_service_ports(process: str) -> list[int]:
     return sorted(ports)
 
 
+_CLEARABLE_LOG_DIRS = (Path("/var/log/apache2"), Path("/var/log/nginx"), Path("/var/log/mysql"))
+_PHP_FPM_LOG_RE = re.compile(r"php\d+\.\d+-fpm\.log")
+
+
+def is_clearable_log(path: str) -> bool:
+    """Solo se vacían logs de los servicios gestionados: la ruta sale de una
+    config editable a mano y `truncate` con sudo destruye cualquier fichero."""
+    target = Path(path).resolve()
+    if any(target != d and target.is_relative_to(d) for d in _CLEARABLE_LOG_DIRS):
+        return True
+    return target.parent == Path("/var/log") and bool(_PHP_FPM_LOG_RE.fullmatch(target.name))
+
+
 def clear_log(path: str) -> bool:
+    if not is_clearable_log(path):
+        log.warning("Se ha rechazado vaciar un fichero fuera de los logs gestionados: %s", path)
+        return False
     return _run_sudo(["truncate", "-s", "0", path])
 
 
