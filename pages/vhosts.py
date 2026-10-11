@@ -12,6 +12,7 @@ from services.vhosts import (
     is_mkcert_installed, vhost_has_https, enable_https, disable_https,
     FRAMEWORKS, is_command_installed, scaffold_project,
     trash_vhost, slugify, get_project_dir, is_valid_vhost_name, register_orphan,
+    is_inside_projects_dir,
 )
 from services.nginx import get_http_port as get_nginx_http_port, get_https_port as get_nginx_https_port
 from services.apache import get_http_port as get_apache_http_port, get_https_port as get_apache_https_port
@@ -49,6 +50,19 @@ class VHostRow(Gtk.Box):
         domain_label = Gtk.Label()
         domain_label.set_markup(f"<span color='gray'>{name}.test</span>")
         btn_content.append(domain_label)
+        projects_dir = settings.get("general", "projects_dir")
+        project_dir = get_project_dir(name)
+        if project_dir is not None and not is_inside_projects_dir(project_dir, projects_dir):
+            outside_label = Gtk.Label()
+            outside_label.set_markup(
+                f"<span color='orange' size='small'>fuera de "
+                f"{GLib.markup_escape_text(projects_dir.replace(str(Path.home()), '~', 1))}</span>"
+            )
+            outside_label.set_tooltip_text(
+                f"El DocumentRoot apunta a {project_dir}, fuera del directorio de proyectos. "
+                "Al moverlo a la papelera su carpeta no se moverá."
+            )
+            btn_content.append(outside_label)
         name_btn.set_child(btn_content)
         self.append(name_btn)
 

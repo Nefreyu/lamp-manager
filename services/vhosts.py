@@ -875,14 +875,50 @@ def _apply_apache_config(path: Path, new_content: str) -> tuple[bool, str]:
     return True, ""
 
 
-def save_vhost_config(name: str, content: str) -> tuple[bool, str]:
+def docroots_in_config(content: str) -> list[str]:
+    """Rutas de todas las directivas DocumentRoot de una config de Apache."""
+    result = []
+    for line in content.splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) == 2 and parts[0].lower() == "documentroot":
+            result.append(parts[1].strip().strip("\"'"))
+    return result
+
+
+def docroot_location_error(docroot: str, projects_dir: str) -> str:
+    """Mensaje de error si el DocumentRoot queda fuera del directorio de proyectos; "" si es válido.
+
+    La app solo gestiona proyectos dentro de ese directorio (detección de carpetas,
+    renombrado, papelera, watcher de git): fuera de él quedarían vhosts sin control.
+    """
+    # Se valida la carpeta del proyecto (sin /public), igual que hace la papelera
+    if is_inside_projects_dir(_project_dir_from_docroot(docroot), projects_dir):
+        return ""
+    return f"El DocumentRoot debe estar dentro de {projects_dir} (se ha indicado {docroot})"
+
+
+def list_vhosts_outside(projects_dir: str) -> list[str]:
+    return [
+        name for name in list_projects()
+        if get_docroot(name) and not is_inside_projects_dir(get_project_dir(name), projects_dir)
+    ]
+
+
+def save_vhost_config(name: str, content: str, projects_dir: str) -> tuple[bool, str]:
+    for docroot in docroots_in_config(content):
+        error = docroot_location_error(docroot, projects_dir)
+        if error:
+            return False, error
     return _apply_apache_config(vhost_config_path(name), content)
 
 
-def update_docroot(name: str, new_docroot: str) -> tuple[bool, str]:
+def update_docroot(name: str, new_docroot: str, projects_dir: str) -> tuple[bool, str]:
     config = vhost_config_path(name)
     if not config.exists():
         return False, f"No existe la configuración de {name}.test"
+    error = docroot_location_error(new_docroot, projects_dir)
+    if error:
+        return False, error
     # Un DocumentRoot inexistente no hace fallar a Apache, pero deja el sitio en 403
     if not Path(new_docroot).is_dir():
         log.warning("DocumentRoot inexistente para %s: %s", name, new_docroot)
@@ -1084,7 +1120,7 @@ def plan_project_rename(name: str, new_docroot: str, projects_dir: str) -> tuple
     return old_project, new_project
 
 
-def rename_project(name: str, new_docroot: str, src: Path, dst: Path) -> tuple[bool, str]:
+def rename_project(name: str, new_docroot: str, src: Path, dst: Path, projects_dir: str) -> tuple[bool, str]:
     """Renombra la carpeta del proyecto y apunta el vhost a ella; si falla, lo deshace."""
     old_docroot = get_docroot(name)
     try:
@@ -1092,7 +1128,7 @@ def rename_project(name: str, new_docroot: str, src: Path, dst: Path) -> tuple[b
     except OSError as e:
         log.error("No se pudo renombrar %s a %s: %s", src, dst, e)
         return False, f"No se pudo renombrar la carpeta: {e}"
-    ok, error = update_docroot(name, new_docroot)
+    ok, error = update_docroot(name, new_docroot, projects_dir)
     if ok:
         return True, ""
 
@@ -1102,7 +1138,7 @@ def rename_project(name: str, new_docroot: str, src: Path, dst: Path) -> tuple[b
     except OSError as e:
         log.error("No se pudo deshacer el renombrado de %s: %s", dst, e)
         return False, f"{error}\nNo se pudo devolver la carpeta a {src}: {e}"
-    update_docroot(name, old_docroot)
+    update_docroot(name, old_docroot, projects_dir)
     return False, error
 
 

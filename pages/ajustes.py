@@ -8,7 +8,7 @@ from config import settings
 from services.autostart import is_enabled as autostart_is_enabled, enable as autostart_enable, disable as autostart_disable
 import services.apache as apache
 import services.nginx as nginx
-from services.vhosts import sync_apache, sync_nginx
+from services.vhosts import sync_apache, sync_nginx, list_vhosts_outside
 
 
 def _spin(min_val: int, max_val: int, value: int) -> Gtk.SpinButton:
@@ -46,6 +46,11 @@ class AjustesPage(Gtk.Box):
         self.projects_entry = Gtk.Entry()
         self.projects_entry.set_text(settings.get("general", "projects_dir"))
         projects_box.append(self.projects_entry)
+        self.projects_warning = Gtk.Label()
+        self.projects_warning.set_xalign(0)
+        self.projects_warning.set_wrap(True)
+        self.projects_warning.set_visible(False)
+        projects_box.append(self.projects_warning)
         self.append(projects_box)
 
         autostart_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
@@ -130,13 +135,31 @@ class AjustesPage(Gtk.Box):
         box.append(spin)
         return box
 
+    def _warn_vhosts_outside(self, projects_dir: str):
+        """Cambiar el directorio no mueve los proyectos: los vhosts que queden
+        fuera dejan de gestionarse del todo (papelera, renombrado, detección)."""
+        outside = list_vhosts_outside(projects_dir)
+        if not outside:
+            self.projects_warning.set_visible(False)
+            return
+        names = ", ".join(outside)
+        self.projects_warning.set_markup(
+            f"<span color='orange' size='small'>{len(outside)} vhost(s) quedan fuera de "
+            f"{GLib.markup_escape_text(projects_dir)} y no se moverán: "
+            f"{GLib.markup_escape_text(names)}</span>"
+        )
+        self.projects_warning.set_visible(True)
+
     def _set_port_spins_sensitive(self, sensitive: bool):
         for spin in (self.apache_http_spin, self.apache_https_spin,
                      self.nginx_http_spin, self.nginx_https_spin):
             spin.set_sensitive(sensitive)
 
     def on_save(self, button):
-        settings.set("general", "projects_dir", self.projects_entry.get_text())
+        new_projects_dir = self.projects_entry.get_text().strip()
+        if new_projects_dir != settings.get("general", "projects_dir"):
+            settings.set("general", "projects_dir", new_projects_dir)
+            self._warn_vhosts_outside(new_projects_dir)
 
         ports = [
             ("apache", "http_port", int(self.apache_http_spin.get_value())),

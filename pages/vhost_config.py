@@ -7,7 +7,7 @@ from pathlib import Path
 from config import settings
 from services.vhosts import (
     get_docroot, update_docroot, vhost_config_path, get_vhost_log_paths, ensure_vhost_logs,
-    plan_project_rename, rename_project, save_vhost_config,
+    plan_project_rename, rename_project, save_vhost_config, docroot_location_error,
 )
 from services.systemd import _run_sudo_output
 from pages.log_viewer import LogViewer
@@ -135,8 +135,13 @@ class VHostConfigPage(Gtk.Box):
         if not new_docroot:
             self._show_status(False, "El DocumentRoot no puede estar vacío")
             return
+        projects_dir = settings.get("general", "projects_dir")
+        location_error = docroot_location_error(new_docroot, projects_dir)
+        if location_error:
+            self._show_status(False, location_error)
+            return
         if Path(new_docroot).is_dir():
-            ok, error = update_docroot(self._name, new_docroot)
+            ok, error = update_docroot(self._name, new_docroot, projects_dir)
             if ok:
                 self.load(self._name)
                 self._show_status(True, "DocumentRoot actualizado correctamente")
@@ -144,7 +149,7 @@ class VHostConfigPage(Gtk.Box):
                 self._show_status(False, f"Error al actualizar el DocumentRoot:\n{error}")
             return
 
-        rename = plan_project_rename(self._name, new_docroot, settings.get("general", "projects_dir"))
+        rename = plan_project_rename(self._name, new_docroot, projects_dir)
         if rename is None:
             self._show_status(False, f"El directorio {new_docroot} no existe")
             return
@@ -170,7 +175,7 @@ class VHostConfigPage(Gtk.Box):
                 return
         except GLib.Error:
             return
-        ok, error = rename_project(self._name, new_docroot, src, dst)
+        ok, error = rename_project(self._name, new_docroot, src, dst, settings.get("general", "projects_dir"))
         self.load(self._name)
         if ok:
             self._show_status(True, f"Carpeta renombrada a {dst.name} y DocumentRoot actualizado")
@@ -180,13 +185,13 @@ class VHostConfigPage(Gtk.Box):
     def on_save_raw(self, button):
         buf = self.raw_view.get_buffer()
         content = buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False)
-        ok, error = save_vhost_config(self._name, content)
+        ok, error = save_vhost_config(self._name, content, settings.get("general", "projects_dir"))
         if ok:
             self.load(self._name)
             self._show_status(True, "Configuración guardada y Apache recargado")
         else:
             # No se recarga el editor: así el usuario conserva su texto para corregirlo
-            self._show_status(False, f"No se ha guardado: la configuración no es válida.\n{error}")
+            self._show_status(False, f"No se ha guardado.\n{error}")
 
     def _show_status(self, success: bool, message: str):
         color = "green" if success else "red"
