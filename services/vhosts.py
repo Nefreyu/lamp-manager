@@ -136,13 +136,20 @@ def slugify(name: str) -> str:
 
 
 def list_orphan_folders(projects_dir: str) -> list[str]:
-    existing = set(list_projects())
     base = Path(projects_dir)
     if not base.exists():
         return []
+    projects = list_projects()
+    # Una carpeta está en uso si coincide con el nombre de un vhost o si es la
+    # carpeta real de su DocumentRoot (p. ej. tras renombrar el proyecto)
+    used = set(projects)
+    for name in projects:
+        project_dir = get_project_dir(name)
+        if project_dir and project_dir.parent == base:
+            used.add(project_dir.name)
     return sorted(
         d.name for d in base.iterdir()
-        if d.is_dir() and d.name not in existing and not d.name.startswith(".")
+        if d.is_dir() and d.name not in used and not d.name.startswith(".")
     )
 
 
@@ -788,6 +795,10 @@ def update_docroot(name: str, new_docroot: str) -> bool:
     config = vhost_config_path(name)
     if not config.exists():
         return False
+    # Un DocumentRoot inexistente no hace fallar a Apache, pero deja el sitio en 403
+    if not Path(new_docroot).is_dir():
+        log.warning("DocumentRoot inexistente para %s: %s", name, new_docroot)
+        return False
     content = _read_root_file(config)
     if content is None:
         return False
@@ -963,6 +974,58 @@ def _project_dir_from_docroot(docroot: str) -> Path | None:
         return None
     p = Path(docroot)
     return p.parent if p.name == "public" else p
+
+
+def get_project_dir(name: str) -> Path | None:
+    return _project_dir_from_docroot(get_docroot(name))
+
+
+def plan_project_rename(name: str, new_docroot: str, projects_dir: str) -> tuple[Path, Path] | None:
+    """Si `new_docroot` solo cambia el nombre de la carpeta del proyecto, devuelve
+    (carpeta actual, carpeta nueva). En cualquier otro caso devuelve None."""
+    old_docroot = get_docroot(name)
+    old_project = _project_dir_from_docroot(old_docroot)
+    if old_project is None or not old_project.is_dir():
+        return None
+
+    new_root = Path(new_docroot)
+    if Path(old_docroot).name == "public":
+        if new_root.name != "public":
+            return None
+        new_project = new_root.parent
+    else:
+        new_project = new_root
+
+    base = Path(projects_dir).resolve()
+    old_resolved = old_project.resolve()
+    if (
+        new_project.exists()
+        or new_project.parent.resolve() != old_resolved.parent
+        or old_resolved.parent != base
+    ):
+        return None
+    return old_project, new_project
+
+
+def rename_project(name: str, new_docroot: str, src: Path, dst: Path) -> bool:
+    """Renombra la carpeta del proyecto y apunta el vhost a ella; si falla, lo deshace."""
+    old_docroot = get_docroot(name)
+    try:
+        src.rename(dst)
+    except OSError as e:
+        log.error("No se pudo renombrar %s a %s: %s", src, dst, e)
+        return False
+    if update_docroot(name, new_docroot):
+        return True
+
+    log.error("Falló la actualización del vhost %s; deshaciendo el renombrado", name)
+    try:
+        dst.rename(src)
+    except OSError as e:
+        log.error("No se pudo deshacer el renombrado de %s: %s", dst, e)
+        return False
+    update_docroot(name, old_docroot)
+    return False
 
 
 def trash_vhost(name: str) -> bool:

@@ -2,7 +2,13 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, GLib
 
-from services.vhosts import get_docroot, update_docroot, vhost_config_path, get_vhost_log_paths, ensure_vhost_logs
+from pathlib import Path
+
+from config import settings
+from services.vhosts import (
+    get_docroot, update_docroot, vhost_config_path, get_vhost_log_paths, ensure_vhost_logs,
+    plan_project_rename, rename_project,
+)
 from services.systemd import _run_sudo_output, _sudo_write_file
 from pages.log_viewer import LogViewer
 
@@ -126,12 +132,47 @@ class VHostConfigPage(Gtk.Box):
         if not new_docroot:
             self._show_status(False, "El DocumentRoot no puede estar vacío")
             return
-        ok = update_docroot(self._name, new_docroot)
-        if ok:
+        if Path(new_docroot).is_dir():
+            ok = update_docroot(self._name, new_docroot)
+            if ok:
+                self.load(self._name)
+                self._show_status(True, "DocumentRoot actualizado correctamente")
+            else:
+                self._show_status(False, "Error al actualizar el DocumentRoot")
+            return
+
+        rename = plan_project_rename(self._name, new_docroot, settings.get("general", "projects_dir"))
+        if rename is None:
+            self._show_status(False, f"El directorio {new_docroot} no existe")
+            return
+        src, dst = rename
+        dialog = Gtk.AlertDialog()
+        dialog.set_message("¿Renombrar la carpeta del proyecto?")
+        dialog.set_detail(
+            f"La carpeta {dst.name} no existe.\n\n"
+            f"Se renombrará {src} a {dst} y se actualizarán Apache y Nginx. "
+            f"El dominio {self._name}.test no cambia."
+        )
+        dialog.set_buttons(["Cancelar", "Renombrar"])
+        dialog.set_default_button(0)
+        dialog.set_cancel_button(0)
+        dialog.choose(
+            self.get_root(), None,
+            lambda d, r: self._on_rename_confirmed(d, r, new_docroot, src, dst),
+        )
+
+    def _on_rename_confirmed(self, dialog, result, new_docroot: str, src: Path, dst: Path):
+        try:
+            if dialog.choose_finish(result) != 1:
+                return
+        except GLib.Error:
+            return
+        if rename_project(self._name, new_docroot, src, dst):
             self.load(self._name)
-            self._show_status(True, "DocumentRoot actualizado correctamente")
+            self._show_status(True, f"Carpeta renombrada a {dst.name} y DocumentRoot actualizado")
         else:
-            self._show_status(False, "Error al actualizar el DocumentRoot")
+            self.load(self._name)
+            self._show_status(False, "Error al renombrar la carpeta; se ha dejado como estaba")
 
     def on_save_raw(self, button):
         buf = self.raw_view.get_buffer()
@@ -145,5 +186,5 @@ class VHostConfigPage(Gtk.Box):
 
     def _show_status(self, success: bool, message: str):
         color = "green" if success else "red"
-        self.status_label.set_markup(f"<span color='{color}'>{message}</span>")
-        GLib.timeout_add_seconds(3, lambda: self.status_label.set_markup("") or False)
+        self.status_label.set_markup(f"<span color='{color}'>{GLib.markup_escape_text(message)}</span>")
+        GLib.timeout_add_seconds(5, lambda: self.status_label.set_markup("") or False)

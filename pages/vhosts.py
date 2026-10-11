@@ -11,7 +11,7 @@ from services.vhosts import (
     create_vhost, enable_vhost, disable_vhost,
     is_mkcert_installed, vhost_has_https, enable_https, disable_https,
     FRAMEWORKS, is_command_installed, scaffold_project,
-    trash_vhost, slugify,
+    trash_vhost, slugify, get_project_dir,
 )
 from services.nginx import get_http_port as get_nginx_http_port, get_https_port as get_nginx_https_port
 from services.apache import get_http_port as get_apache_http_port, get_https_port as get_apache_https_port
@@ -132,8 +132,10 @@ class VHostRow(Gtk.Box):
         Gio.AppInfo.launch_default_for_uri(f"{protocol}://{self.name}.test:{port}", None)
 
     def on_open_folder(self, button):
-        projects_dir = settings.get("general", "projects_dir")
-        folder = Gio.File.new_for_path(f"{projects_dir}/{self.name}")
+        project_dir = get_project_dir(self.name)
+        if project_dir is None:
+            project_dir = Path(settings.get("general", "projects_dir")) / self.name
+        folder = Gio.File.new_for_path(str(project_dir))
         Gio.AppInfo.launch_default_for_uri(folder.get_uri(), None)
 
     def on_https_clicked(self, button):
