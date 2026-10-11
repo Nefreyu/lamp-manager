@@ -743,11 +743,38 @@ def detect_framework(docroot: str) -> str:
     return "php"
 
 
+def _read_root_file(path: Path) -> str | None:
+    """Lee un fichero de root; recurre a sudo para los creados en 0600 por versiones anteriores."""
+    try:
+        return path.read_text()
+    except PermissionError:
+        return _run_sudo_output(["cat", str(path)])
+    except OSError as e:
+        log.warning("No se pudo leer %s: %s", path, e)
+        return None
+
+
+def repair_config_permissions() -> bool:
+    """Deja en 0644 los ficheros que versiones anteriores escribieron en 0600."""
+    candidates = [
+        *APACHE_SITES_AVAILABLE.glob("*.test.conf"),
+        APACHE_SITES_AVAILABLE / "000-localhost-ssl.conf",
+        *nginx.SITES_AVAILABLE.glob("*.test.conf"),
+        nginx.SITES_AVAILABLE / f"{nginx.DEFAULT_SITE_NAME}.conf",
+        Path("/etc/systemd/system/mailpit.service"),
+    ]
+    unreadable = [str(p) for p in candidates if p.exists() and not os.access(p, os.R_OK)]
+    if not unreadable:
+        return True
+    log.info("Corrigiendo permisos de %d ficheros de configuración", len(unreadable))
+    return _run_sudo(["chmod", "0644", *unreadable])
+
+
 def get_docroot(name: str) -> str:
     config = vhost_config_path(name)
     if not config.exists():
         return ""
-    content = _run_sudo_output(["cat", str(config)])
+    content = _read_root_file(config)
     if not content:
         return ""
     for line in content.splitlines():
@@ -761,8 +788,11 @@ def update_docroot(name: str, new_docroot: str) -> bool:
     config = vhost_config_path(name)
     if not config.exists():
         return False
+    content = _read_root_file(config)
+    if content is None:
+        return False
     lines = []
-    for line in config.read_text().splitlines():
+    for line in content.splitlines():
         stripped = line.strip()
         indent = " " * (len(line) - len(line.lstrip()))
         if stripped.startswith("DocumentRoot "):
@@ -886,6 +916,7 @@ def sync_nginx() -> bool:
     existiera esta función queden disponibles en Nginx sin esperar a que el
     usuario los toque.
     """
+    repair_config_permissions()
     nginx.ensure_default_site()
     ok = True
     for name in list_projects():

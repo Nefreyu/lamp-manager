@@ -101,13 +101,17 @@ def _run_sudo_feed(command: list, data: str) -> bool:
                     log.warning("No se pudo eliminar el archivo temporal %s: %s", path, e)
 
 
-def _sudo_write_file(dest_path: str, content: str) -> bool:
-    """Escribe contenido en un archivo privilegiado usando un fichero temporal."""
+def _sudo_write_file(dest_path: str, content: str, mode: str = "0644") -> bool:
+    """Escribe contenido en un archivo privilegiado usando un fichero temporal.
+
+    Se usa `install -m` y no `cp`: el temporal se crea con permisos 0600 y `cp`
+    los heredaba en los ficheros nuevos, dejándolos ilegibles sin sudo.
+    """
     with tempfile.NamedTemporaryFile(mode="w", suffix=".lamp-manager", delete=False) as f:
         f.write(content)
         tmp_path = f.name
     try:
-        return _run_sudo(["cp", tmp_path, dest_path])
+        return _run_sudo(["install", "-m", mode, tmp_path, dest_path])
     finally:
         os.unlink(tmp_path)
 
