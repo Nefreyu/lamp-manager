@@ -9,6 +9,26 @@ log = logging.getLogger(__name__)
 gi.require_version('Dbusmenu', '0.4')
 from gi.repository import Dbusmenu
 
+ICON_OK = "io.github.nefreyu.LampManager"
+ICON_WARNING = "io.github.nefreyu.LampManager-warning"
+ICON_ERROR = "io.github.nefreyu.LampManager-error"
+
+WEB_SERVERS = ("apache2", "nginx")
+
+
+def icon_for_statuses(statuses: dict[str, bool]) -> str:
+    """Elige el icono del semáforo a partir del estado de los servicios instalados.
+
+    Rojo si no hay ningún servidor web activo, naranja si los proyectos no pueden
+    cargar bien porque falta PHP-FPM o MySQL, y azul si cargan todos. Basta con
+    uno de los dos servidores web, y Mailpit no cuenta.
+    """
+    if not any(active for sid, active in statuses.items() if sid in WEB_SERVERS):
+        return ICON_ERROR
+    required = (active for sid, active in statuses.items() if sid == "mysql" or sid.endswith("-fpm"))
+    return ICON_OK if all(required) else ICON_WARNING
+
+
 _SNI_XML = """\
 <node>
   <interface name="org.kde.StatusNotifierItem">
@@ -46,7 +66,7 @@ class SystemTray:
             "Id":            GLib.Variant("s", "lamp-manager"),
             "Category":      GLib.Variant("s", "ApplicationStatus"),
             "Status":        GLib.Variant("s", "Active"),
-            "IconName":      GLib.Variant("s", "io.github.nefreyu.LampManager"),
+            "IconName":      GLib.Variant("s", ICON_OK),
             "IconThemePath": GLib.Variant("s", str(Path.home() / ".local/share/icons")),
             "Title":         GLib.Variant("s", "LAMP Manager"),
             "Menu":          GLib.Variant("o", "/MenuBar"),
@@ -164,13 +184,7 @@ class SystemTray:
                             self._notify_service_up(s["label"])
             self._prev_statuses = statuses
 
-            active = sum(1 for v in statuses.values() if v)
-            if active == len(installed):
-                icon = "io.github.nefreyu.LampManager"
-            elif active == 0:
-                icon = "io.github.nefreyu.LampManager-error"
-            else:
-                icon = "io.github.nefreyu.LampManager-warning"
+            icon = icon_for_statuses(statuses)
             current = self._sni_props["IconName"].unpack()
             if icon != current:
                 self._sni_props["IconName"] = GLib.Variant("s", icon)
