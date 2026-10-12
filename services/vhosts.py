@@ -115,31 +115,22 @@ def scaffold_project(framework: dict, name: str, projects_dir: str, on_progress=
         else:
             base.mkdir(parents=True, exist_ok=True)
             # Sin índice, Apache responde 403 al abrir un proyecto recién creado
-            _write_initial_index(base, name)
+            _write_initial_index(base)
         return True, None
     except Exception as e:
         log.error("Error al crear el proyecto '%s': %s", name, e)
         return False, str(e)
 
 
-def _initial_index_php(name: str) -> str:
-    domain = f"{name}.test".replace("\\", "\\\\").replace("'", "\\'")
-    return f"""<?php
-
-declare(strict_types=1);
-
-header('Content-Type: text/plain; charset=utf-8');
-
-echo '{domain}' . PHP_EOL;
-echo 'PHP ' . PHP_VERSION . PHP_EOL;
-echo __DIR__ . PHP_EOL;
-"""
+# La plantilla obtiene el dominio y el nombre de la base de datos de HTTP_HOST,
+# así que se copia sin sustituir nada
+INDEX_BASIC_TEMPLATE = Path(__file__).parent / "templates" / "index_basic.php"
 
 
-def _write_initial_index(project_dir: Path, name: str) -> None:
+def _write_initial_index(project_dir: Path) -> None:
     if any((project_dir / index).exists() for index in ("index.php", "index.html")):
         return
-    (project_dir / "index.php").write_text(_initial_index_php(name))
+    (project_dir / "index.php").write_text(INDEX_BASIC_TEMPLATE.read_text(encoding="utf-8"), encoding="utf-8")
 
 
 HOSTS_FILE = Path("/etc/hosts")
