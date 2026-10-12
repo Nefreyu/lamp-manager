@@ -7,8 +7,7 @@ EVIL_BRANCH = "<script>alert('rama')</script>"
 EVIL_DOCROOT = '/home/juan/www/demo"><img src=x onerror=alert(1)>'
 
 
-@pytest.fixture
-def rendered(tmp_path, monkeypatch) -> str:
+def render(tmp_path, monkeypatch, nginx_active: bool = False) -> str:
     """Genera el dashboard con datos maliciosos y devuelve el HTML que se escribiría."""
     written: dict[str, str] = {}
     monkeypatch.setattr(vhosts, "INDEX_PAGE", tmp_path / "index.html")
@@ -27,9 +26,15 @@ def rendered(tmp_path, monkeypatch) -> str:
     monkeypatch.setattr(systemd, "is_installed", lambda svc: False)
     monkeypatch.setattr(vhosts.apache, "get_http_port", lambda: 80)
     monkeypatch.setattr(vhosts.nginx, "get_http_port", lambda: 8080)
+    monkeypatch.setattr(vhosts, "get_status", lambda service_id: service_id == "nginx" and nginx_active)
 
     assert vhosts.generate_index_page()
     return written["html"]
+
+
+@pytest.fixture
+def rendered(tmp_path, monkeypatch) -> str:
+    return render(tmp_path, monkeypatch)
 
 
 def test_dashboard_escapes_git_branch(rendered):
@@ -50,3 +55,15 @@ def test_dashboard_escapes_project_size(rendered):
 def test_dashboard_keeps_its_own_markup(rendered):
     assert '<span class="card-name">demo</span>' in rendered
     assert 'href="http://demo.test"' in rendered
+
+
+def test_dashboard_shows_nginx_link_when_nginx_is_active(tmp_path, monkeypatch):
+    html = render(tmp_path, monkeypatch, nginx_active=True)
+
+    assert 'href="http://demo.test:8080"' in html
+
+
+def test_dashboard_hides_nginx_link_when_nginx_is_stopped(tmp_path, monkeypatch):
+    html = render(tmp_path, monkeypatch, nginx_active=False)
+
+    assert "demo.test:8080" not in html

@@ -29,6 +29,12 @@ _VERSION_FNS = {
 if _fpm_service:
     _VERSION_FNS[_fpm_service["id"]] = get_php_version
 
+
+def _notify_services_changed() -> None:
+    app = Gio.Application.get_default()
+    if app is not None and hasattr(app, "on_services_changed"):
+        app.on_services_changed()
+
 _CONFIGTEST_FNS = {
     "apache2": apache_configtest,
     "nginx": nginx_configtest,
@@ -292,6 +298,7 @@ class ServiceRow(Gtk.Box):
         log.info("Operación en %s: %s", self.service_id, result)
         def after_toggle():
             self.refresh()
+            _notify_services_changed()
             if self.on_changed:
                 self.on_changed()
         GLib.timeout_add(500, after_toggle)
@@ -304,7 +311,11 @@ class ServiceRow(Gtk.Box):
             storage_enabled = settings.get("mailpit", "storage_enabled") == "true"
             storage_path = settings.get("mailpit", "storage_path")
             install_mailpit_service(storage_enabled, storage_path)
-        GLib.timeout_add(500, self.refresh)
+
+        def after_install():
+            self.refresh()
+            _notify_services_changed()
+        GLib.timeout_add(500, after_install)
 
 
 class ServiciosPage(Gtk.Box):
@@ -380,6 +391,7 @@ class ServiciosPage(Gtk.Box):
         self._check_fpm_warning()
         for row in self.rows:
             row.refresh()
+        _notify_services_changed()
 
     def _auto_refresh(self):
         if self.get_mapped():

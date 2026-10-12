@@ -41,6 +41,7 @@ class SystemTray:
     def __init__(self, on_toggle: callable, on_quit: callable):
         self._on_toggle = on_toggle
         self._on_quit = on_quit
+        self._registered = False
         self._sni_props = {
             "Id":            GLib.Variant("s", "lamp-manager"),
             "Category":      GLib.Variant("s", "ApplicationStatus"),
@@ -76,6 +77,11 @@ class SystemTray:
         except Exception as e:
             log.error("Error al iniciar el tray: %s", e)
             return False
+
+    def refresh_icon(self) -> None:
+        """Actualiza el icono al momento sin esperar a la comprobación periódica."""
+        if self._registered:
+            self._do_icon_check()
 
     def set_window_visible(self, visible: bool):
         label = "Ocultar LAMP Manager" if visible else "Mostrar LAMP Manager"
@@ -124,6 +130,7 @@ class SystemTray:
                 "org.kde.StatusNotifierItem", "NewStatus",
                 GLib.Variant("(s)", ("Active",)),
             )
+            self._registered = True
             GLib.idle_add(self._do_icon_check)
             GLib.timeout_add_seconds(30, self._auto_icon_check)
         except Exception as e:

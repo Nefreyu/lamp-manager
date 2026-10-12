@@ -82,6 +82,7 @@ class App(Adw.Application):
         self._autostart = False
         self._window: MainWindow | None = None
         self._tray: SystemTray | None = None
+        self._watcher: ProjectWatcher | None = None
         self.add_main_option(
             "autostart", 0, GLib.OptionFlags.NONE, GLib.OptionArg.NONE,
             "Arrancar en segundo plano en el área de notificación", None,
@@ -156,6 +157,13 @@ class App(Adw.Application):
         self._watcher.start()
         self._window.connect("hide", lambda *_: self._tray.set_window_visible(False))
         self._tray.set_window_visible(window_visible)
+
+    def on_services_changed(self) -> None:
+        """Actualiza al momento el icono de la bandeja y el dashboard tras cambiar un servicio desde la app."""
+        if self._tray is not None:
+            self._tray.refresh_icon()
+        if self._watcher is not None:
+            self._watcher.check_services()
             
 
 if __name__ == "__main__":

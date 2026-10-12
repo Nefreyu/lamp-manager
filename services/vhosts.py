@@ -11,7 +11,7 @@ import zipfile
 from datetime import datetime
 from html import escape as html_escape
 from pathlib import Path
-from services.systemd import _run_sudo, _sudo_write_file, _run_sudo_output, _run_sudo_feed
+from services.systemd import _run_sudo, _sudo_write_file, _run_sudo_output, _run_sudo_feed, get_status
 import services.nginx as nginx
 import services.apache as apache
 import services.hosts as hosts
@@ -473,13 +473,12 @@ def generate_index_page() -> bool:
         domain      = f"{name}.test"
         project_dir = str(_project_dir_from_docroot(docroot)) if docroot else ""
 
-        nginx_installed = Path("/usr/sbin/nginx").exists()
         nginx_port       = nginx.get_https_port() if has_https else nginx.get_http_port()
         nginx_url        = f"{protocol}://{domain}:{nginx_port}"
         nginx_link = (
             f'<a href="{html_escape(nginx_url)}" target="_blank" class="card-link card-link-secondary">'
             f'Nginx :{nginx_port} <span class="arrow">&#8594;</span></a>'
-            if nginx_installed else ""
+            if nginx_active else ""
         )
 
         apache_port    = apache.get_https_port() if has_https else apache.get_http_port()
@@ -539,6 +538,7 @@ def generate_index_page() -> bool:
         </div>
       </div>"""
 
+    nginx_active = get_status("nginx")
     cards = "\n".join(_card(p, i) for i, p in enumerate(projects))
     tools_section = _tools_html()
     count = len(projects)
