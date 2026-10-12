@@ -52,7 +52,7 @@ A GTK4 application to manage your local PHP development stack on GNOME desktops.
 
 ## Requirements
 
-- Ubuntu 26.04 (packages in the PPA are built for this release)
+- Ubuntu 24.04 or 26.04 (the PPA provides packages for both releases)
 - Python 3.10 or later, GTK 4 and libadwaita
 - `sudo` access (required to manage services and configuration files)
 
